@@ -1,0 +1,4 @@
+pathlib
+h5py
+ijson
+numpy
