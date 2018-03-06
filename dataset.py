@@ -22,6 +22,6 @@ class VGDataset(Dataset):
 	def __getitem__(self, index):
 		image_dict = self.image_data[index]
 		image_name = image_dict["image_name"]
-		image = Image.open(self.image_dir / image_name)
-		image = self.transform(im).unsqueeze(0)
+		image = Image.open(self.image_dir + image_name)
+		image = self.transform_vgg(image).unsqueeze(0)
 		return image
