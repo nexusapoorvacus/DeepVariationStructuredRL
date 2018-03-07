@@ -30,7 +30,8 @@ def add_predicates(graph, predicate_data):
 				pred_node = Predicate_Node(predicate_name, graph)
 			subject_name = relationship_info["subject"]["name"] if "name" in relationship_info["subject"] else relationship_info["subject"]["names"][0]
 			object_name = relationship_info["object"]["name"] if "name" in relationship_info["object"] else relationship_info["object"]["names"][0]
-			object_name = predicate_to_aliases(object_name)
+			subject_name = entity_to_aliases(subject_name)
+			object_name = entity_to_aliases(object_name)
 			subject_node = graph.get_entity_by_name(subject_name)
 			if subject_node == None:
 				subject_node = Entity_Node(subject_name, graph)
@@ -56,7 +57,8 @@ def add_attributes(graph, attribute_data):
 				if graph.get_attribute_id(attribute_name) == None:
 					# add node to graph
 					attribute_node = Attribute_Node(attribute_name, graph)
-				subject_name = entity_to_aliases(entity["name"]) if "name" in entity else entity_to_aliases(entity["names"])
+				subject_name = entity["name"] if "name" in entity else entity["names"]
+				subject_name = entity_to_aliases(subject_name)
 				subject_node = graph.get_entity_by_name(subject_name)
 				if subject_node == None:
 					subject_node = Entity_Node(subject_name, graph)

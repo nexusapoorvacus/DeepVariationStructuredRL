@@ -3,17 +3,17 @@ PREDICATE_ALIAS_FILE = "data/relationship_alias.txt"
 
 def entity_to_aliases(entity):
 	if type(entity) == list:
-		e = entity[0]
-	else:
-		e = entity
-	if e in OBJECT_ALIASES:
-		return OBJECT_ALIASES[e]
-	return tuple(entity)
+		entity = entity[0]
+	if entity in OBJECT_ALIASES:
+		return OBJECT_ALIASES[entity]
+	return (entity,)
 
 def predicate_to_aliases(predicate):
+	if type(predicate) == list:
+		predicate = predicate[0]
 	if predicate in PREDICATE_ALIASES:
 		return PREDICATE_ALIASES[predicate]
-	return tuple(predicate)
+	return (predicate,)
 
 def read_aliases(filename):
 	alias_file = open(filename, "r")
