@@ -1,5 +1,5 @@
-OBJECT_ALIAS_FILE = "data/object_alias.txt"
-PREDICATE_ALIAS_FILE = "data/relationship_alias.txt"
+OBJECT_ALIAS_FILE = "data/raw_data/object_alias.txt"
+PREDICATE_ALIAS_FILE = "data/raw_data/relationship_alias.txt"
 
 def entity_to_aliases(entity):
 	if type(entity) == list:
