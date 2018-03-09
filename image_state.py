@@ -42,6 +42,9 @@ class ImageState():
 			# NOTE: subject_id and object_id are ids for this particular image
 			#	predicate_id is the id from the SAG
 			pass
+
+		def is_done(self):
+			# returns true if we are done building a scene graph for this image
 		
 		def reset(self):
 			self.current_scene_graph = {"relationships": [], "entities":[]}
