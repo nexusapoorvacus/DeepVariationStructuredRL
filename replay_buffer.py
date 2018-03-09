@@ -7,11 +7,11 @@ Transition = namedtuple('Transition', ('state', 'next_state', 'attribute_actions
 
 class ReplayMemory(object):
 
-	def __init__(self, capacity):
+	def __init__(self, capacity, minimum_number_of_samples):
 		self.capacity = capacity
 		self.memory = []
 		self.position = 0
-		self.minimum_number_samples = 500
+		self.minimum_number_samples = minimum_number_of_samples
 
 	def push(self, *args):
 		"""Saves a transition."""

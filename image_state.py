@@ -9,12 +9,14 @@ class ImageState():
 		
 		# number of objects to explore for a subject
 		self.max_objects_to_explore = 5
-		
+		self.objects_explored_per_subject = {}		
+
 		# entities chosen to explore so far
 		self.explored_entities = []
-		
-		# next object to explore
-		self.next_object = None
+	
+		# entity currently being explored
+		self.current_subject = None
+		self.current_object = None
 		
 		# image feature
 		self.image_feature = image_feature
@@ -49,7 +51,9 @@ class ImageState():
 		def reset(self):
 			self.current_scene_graph = {"relationships": [], "entities":[]}
 			self.explored_entities = []
-			self.next_object = None
+			self.object_counts_per_subject = {}
+			self.current_subject = None
+			self.current_object = None
 			self.previously_mined_attributes = defaultdict(lambda: [])
 			self.previously_mined_next_objects = defaultdict(lambda: [])
 
@@ -57,4 +61,3 @@ class ImageState():
 			# should return reward_attribute, reward_predicate, and 
 			# reward_next_object, and boolean indicating whether done
 			pass
-
