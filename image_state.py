@@ -49,3 +49,6 @@ class ImageState():
 			self.next_object = None
 			self.previously_mined_attributes = defaultdict(lambda: [])
 			self.previously_mined_next_objects = defaultdict(lambda: [])
+
+		def step(self, attribute_action, predicate_action, next_object_action):
+			pass
