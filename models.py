@@ -3,14 +3,15 @@ import torch.nn as nn
 import torchvision.models as models
 
 class VGG16(nn.Module):
-    def __init__(self):
-        super(VGG16, self).__init__()
-        self.model = models.vgg16(pretrained=True)
-	for param in self.model.parameters():
-                param.requires_grad = False
-    def forward(self, x):
-        x = self.model.features(x)
-        return x
+	def __init__(self):
+		super(VGG16, self).__init__()
+		self.model = models.vgg16(pretrained=True)
+		for param in self.model.parameters():
+			param.requires_grad = False
+    
+	def forward(self, x):
+        	x = self.model.features(x)
+        	return x
 
 class DQN(nn.Module):
 	"""

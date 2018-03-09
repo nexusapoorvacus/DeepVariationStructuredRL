@@ -5,32 +5,22 @@ from models import VGG16, DQN
 from operator import itemgetter
 from faster_rcnn import network
 from faster_rcnn.faster_rcnn import FasterRCNN
+from image_state import ImageState
+
 import torch
 import torch.nn as nn
 import argparse
 import json
 import pickle
-class ImageState():
-
-	def __init__(self, image_name, gt_scene_graph):
-		self.image_name = image_name
-		self.gt_scene_graph = gt_scene_graph
-		self.choose_new_subject = False
-		self.current_scene_graph = {"relationships": [], "entities": []}
-		self.explored_entities = []
-
-	def add_entities(self, proposals):
-		pass
 
 def train(model_vgg, model_frcnn, model_entities, model_predicate, model_attributes, data_loader, criterion):
-	print("CUDA Available: " + torch.cuda.is_available())
+	print("CUDA Available: " + str(torch.cuda.is_available()))
 	# make model CUDA
 	if torch.cuda.is_available():
 		model = model.cuda()
-	
+		model_entites_
 	# dictionary to keep track of image states
 	image_states = {}
-
 
 	for progress, (image, gt_scene_graph) in enumerate(data_loader):
 		if torch.cuda.is_available():
@@ -42,7 +32,6 @@ def train(model_vgg, model_frcnn, model_entities, model_predicate, model_attribu
 			# initializing image state
 			gt_sg = gt_scene_graph[idx]
 			image_feature = images[idx]
-			dets, scores, classes = detector.detect(image, 0.7)
 			entity_bboxes, entity_scores, entity_classes = model_frcnn.detect(image, 0.7)
 			entity_features = []
 			for box in entity_boxes:
@@ -88,17 +77,27 @@ if __name__=='__main__':
 	args = parser.parse_args()
 
 	# create semantic action graph
-	#semantic_action_graph = pickle.load(open("graph.pickle", "rb"))
+	semantic_action_graph = pickle.load(open("graph.pickle", "rb"))
+	
+	# create VGG model for state featurization
 	model_vgg = VGG16()
+
+	# create Faster-RCNN model for state featurization
 	model_file = 'VGGnet_fast_rcnn_iter_70000.h5'
 	model_frcnn = FasterRCNN()
 	network.load_net(model_file, model_frcnn)
 	model_frcnn.cuda()
-    	model_frcnn.eval()
+	model_frcnn.eval()
+
+	# create DQN's for the next object, predicates, and attributes
+	DQN_next_object = DQN()
+	DQN_predicate = DQN()
+	DQN_attribute = DQN()
+
 	# load train data samples
 	if args.train:
 		train_data_samples = json.load(open(args.train_data))
 		train_dataset = VGDataset(train_data_samples, args.images_dir)
 		train_data_loader = DataLoader(dataset=train_dataset, batch_size=args.batch_size,
 									shuffle=True, num_workers=args.num_workers)
-		train_images_state = train(model_vgg, model_frcnn, model_entities= None, model_predicate=None, model_attributes= None, data_loader=train_data_loader, criterion=None)
+		train_images_state = train(model_vgg, model_frcnn, DQN_next_object, , DQN_predicate, DQN_attribute, data_loader=train_data_loader)

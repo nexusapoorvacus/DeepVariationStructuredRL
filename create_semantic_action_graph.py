@@ -8,9 +8,9 @@ import os
 import sys
 
 # files to read
-OBJECTS_FILE = "data/objects.json"
-PREDICATES_FILE = "data/relationships.json"
-ATTRIBUTES_FILE = "data/attributes.json"
+OBJECTS_FILE = "data/raw_data/objects.json"
+PREDICATES_FILE = "data/raw_data/relationships.json"
+ATTRIBUTES_FILE = "data/raw_data/attributes.json"
 
 def add_objects(graph, object_data, entity_counts, min_occurrences):
 	for image in object_data:

@@ -3,8 +3,8 @@ from utils.vg_utils import entity_to_aliases, predicate_to_aliases
 import json
 
 # file to read
-SCENE_GRAPH_FILE = "data/scene_graphs.json"
-ATTRIBUTES_FILE = "data/attributes.json"
+SCENE_GRAPH_FILE = "data/raw_data/scene_graphs.json"
+ATTRIBUTES_FILE = "data/raw_data/attributes.json"
 
 entity_counts = {}
 predicate_counts = {}
