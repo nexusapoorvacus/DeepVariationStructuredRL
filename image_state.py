@@ -51,4 +51,7 @@ class ImageState():
 			self.previously_mined_next_objects = defaultdict(lambda: [])
 
 		def step(self, attribute_action, predicate_action, next_object_action):
+			# should return reward_attribute, reward_predicate, and 
+			# reward_next_object, and boolean indicating whether done
 			pass
+

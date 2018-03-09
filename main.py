@@ -38,7 +38,6 @@ def train(model_vgg, model_frcnn, model_next_object_main, model_next_object_targ
 		images = model_vgg(image)
 
 		# iterate through images in batch
-		num_images_in_batch = image_state.size(0)	
 		for idx in range(num_images_in_batch):
 			# initializing image state if necessary
 			image_name = gt_scene_graph[idx]["image_name"]
@@ -72,8 +71,97 @@ def train(model_vgg, model_frcnn, model_next_object_main, model_next_object_targ
 																						object_name, previously_mined_attributes)
 			next_object_adaptive_actions = find_object_neighbors(subject_bbox, im_state.entity_proposals, previously_mined_next_objects)
 					
+			# creating state + action vectors to feed in DQN
+			attribute_state_vectors = torch.concat([state_vector, torch.from_numpy(np.identity(len(attribute_adaptive_actions)))], 1)
+			predicate_state_vectors = torch.concat([state_vector, torch.from_numpy(np.identity(len(predicate_adaptive_actions)))], 1)
+			next_object_state_vectors = torch.concat([state_vector, torch.from_numpy(np.identity(len(next_object_adaptive_actions)))], 1)
 
-			entity_action_vectors = torch.from_numpy(np.identity())
+			# choose action using epsilon greedy
+			attribute_action = choose_action_epsilon_greedy(attribute_state_vectors, attribute_adaptive_actions, model_attribute_main,
+															epsilon, training=replay_buffer.can_sample())
+			predicate_action = choose_action_epsilon_greedy(predicate_state_vectors, predicate_adaptive_actions, model_predicate_main,
+															epsilon, training=replay_buffer.can_sample())
+			next_object_action = choose_action_epsilon_greedy(next_object_state_vectors, next_object_adaptive_actions, model_next_object_main,
+															epsilon, training=replay_buffer.can_sample())
+
+			# step image_state
+			attribute_reward, predicate_reward, next_object_reward, done = image_state.step(attribute_action, predicate_action, next_object_action)
+			next_state = create_state_vector(im_state)		
+	
+			# decay epsilon
+			epsilon = epsilon * epsilon_decay
+
+			# add transition tuple to replay buffer
+			replay_buffer.push(state_vector, attribute_adaptive_actions, predicate_adaptive_actions, next_object_adaptive_actions, next_state, attribute_reward, 
+								predicate_reward, next_object_reward, done)
+
+			# sample minibatch if replay_buffer has enough samples
+			if replay_buffer.can_sample():
+				minibatch_transitions = replay_buffer.sample(minibatch_size)
+				main_q_attribute_list, main_q_predicate_list, main_q_next_object_list = [], [], []
+				target_q_attribute_list, target_q_predicate_list, target_q_next_object_list = [], [], []
+				for transition in minibatch_transitions:
+					target_q_attribute, target_q_predicate, target_q_next_object = None, None, None
+					if transition.done:
+						target_q_attribute = transition.attribute_reward
+						target_q_predicate = transition.predicate_reward
+						target_q_next_object = transition.target_q_next_object
+					else:
+						next_state_attribute = torch.concat([transition.next_state, 
+														torch.from_numpy(np.identity(len(transition.next_state_attribute_actions)))], 1)
+						next_state_predicate = torch.concat([transition.next_state, 
+														torch.from_numpy(np.identity(len(transition.next_state_predicate_actions)))], 1)
+						next_state_next_object = torch.concat([transition.next_state, 
+														torch.from_numpy(np.identity(len(transition.next_state_next_object_actions)))], 1)
+						target_q_attribute = transition.attribute_reward + gamma * torch.max(model_attribute_target(next_state_attribute))
+						target_q_predicate = transition.predicate_reward + gamma * torch.max(model_predicate_target(next_state_predicate))
+						target_q_next_object = transition.next_object_reward + gamma * torch.max(model_next_object_target(next_state_next_object))
+					# compute loss
+					main_state_attribute = torch.concat([transition.state, 
+														torch.from_numpy(np.identity(len(transition.attribute_actions)))], 1)
+					main_state_predicate = torch.concat([transition.state, 
+														torch.from_numpy(np.identity(len(transition.predicate_actions)))], 1)
+					main_state_next_object = torch.concat([transition.state, 
+														torch.from_numpy(np.identity(len(transition.next_object_actions)))], 1)
+					main_q_attribute = transition.attribute_reward + gamma * torch.max(model_attribute(main_state_attribute))
+					main_q_predicate = transition.predicate_reward + gamma * torch.max(model_predicate(main_state_predicate))
+					main_q_next_object = transition.next_object_reward + gamma * torch.max(model_next_object(main_state_next_object))
+					
+					# add to q value lists
+					target_q_attribute_list.append(target_q_attribute)
+					target_q_predicate_list.append(target_q_predicate)
+					target_q_next_object_list.append(target_q_next_object)
+
+					main_q_attribute_list.append(main_q_attribute)
+					main_q_predicate_list.append(main_q_predicate)
+					main_q_next_object_list.append(main_q_next_object)
+
+				# calculate loss and optimize model
+				loss_attribute = loss_fn_attribute(torch.FloatTensor(main_q_attribute_list), torch.FloatTensor(target_q_attribute_list))
+				loss_predicate = loss_fn_predicate(torch.FloatTensor(main_q_predicate_list), torch.FloatTensor(target_q_predicate_list))
+				loss_next_object = loss_fn_next_object(torch.FloatTensor(main_q_next_object), torch.FloatTensor(target_q_next_object))
+				
+				optimizer_attribute.zero_grad()	
+				optimizer_predicate.zero_grad()
+				optimizer_next_object.zero_grad()
+
+				loss_attribute.backward()
+				loss_predicate.backward()
+				loss_next_object.backward()
+
+				for param in model_attribute.parameters:
+					param.grad.data.clamp_(-1, 1)
+				for param in model_predicate.parameters:
+					param.grad.data.clamp_(-1, 1)
+				for param in model_next_object.parameters:
+					param.grad.data.clamp_(-1, 1)
+
+				optimizer_attibute.step()
+				optimizer_predicate.step()
+				optimizer_next_object.step()
+
+
+
 
 def create_state_vector(image_state):
 	# find subject to start with if curr_subject is None
@@ -88,9 +176,9 @@ def create_state_vector(image_state):
 		curr_subject = torch.from_numpy(entity_features[curr_subject])
 	return torch.cat([image_feature, curr_subject], 1)
 
-def choose_action_epsilon_greedy(state, adaptive_action_set, model, epsilon):
+def choose_action_epsilon_greedy(state, adaptive_action_set, model, epsilon, training=False):
 	sample = random.random()
-	if sample > epsilon: # exploit
+	if sample > epsilon and training: # exploit
 		return adaptive_action_set[model(state).data.max(1)]
 	else: # explore
 		return random.choice(adaptive_action_set)
