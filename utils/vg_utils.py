@@ -15,14 +15,14 @@ def predicate_to_aliases(predicate):
 		return PREDICATE_ALIASES[predicate]
 	return (predicate,)
 
-def find_object_neighbors(subject_bbox, image_data_label):
-	image_objects = image_data_label["objects"]
+def find_object_neighbors(subject_bbox, entity_proposals, previously_mined_objects=[]):
 	neighboring_objects = []
 	x, y, w, h = subject_bbox
-	for obj in image_objects:
-		if subject_bbox != (obj["x"], obj["y"], obj["w"], obj["h"]):
-			if abs(obj["x"] - x) < 0.5 * (obj["w"] + w) and abs(obj["y"] - y) < 0.5 * (obj["h"] + h):
-				neighboring_objects.append(obj)
+	for obj in entity_proposals:
+		if obj not in previously_mined_objects:
+			if subject_bbox != (obj[0], obj[1], obj[2], obj[3]):
+				if abs(obj[0] - x) < 0.5 * (obj[2] + w) and abs(obj[1] - y) < 0.5 * (obj[3] + h):
+					neighboring_objects.append(obj)
 	return neighboring_objects
 
 # HELPER FUNCTIONS

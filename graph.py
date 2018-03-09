@@ -44,7 +44,7 @@ class Semantic_Action_Graph():
 			return self.entity_nodes[self.entity_name_to_id[entity]]
 		return None
 
-	def variation_based_traversal_entities(self, subject_name, object_name, previously_mined_attributes=[], max_num_to_return=-1):
+	def variation_based_traversal(self, subject_name, object_name, previously_mined_attributes=[], max_num_to_return=-1):
 		subject_node = self.get_entity_by_name(subject_name)
 		object_node = self.get_entity_by_name(object_name)
 		attributes_to_return = {}
