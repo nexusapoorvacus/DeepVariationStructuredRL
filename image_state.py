@@ -47,7 +47,8 @@ class ImageState():
 
 		def is_done(self):
 			# returns true if we are done building a scene graph for this image
-		
+			pass		
+
 		def reset(self):
 			self.current_scene_graph = {"relationships": [], "entities":[]}
 			self.explored_entities = []

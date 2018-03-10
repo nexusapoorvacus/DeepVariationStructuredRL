@@ -8,7 +8,7 @@ from faster_rcnn import network
 from faster_rcnn.faster_rcnn import FasterRCNN
 from image_state import ImageState
 from replay_buffer import ReplayMemory
-from utils.vg_utils import entity_to_alias, predicate_to_alias, find_object_neighbors, crop_box
+from utils.vg_utils import entity_to_aliases, predicate_to_aliases, find_object_neighbors, crop_box
 
 import torch
 import torch.nn as nn
@@ -20,10 +20,14 @@ def train():
 	print("CUDA Available: " + str(torch.cuda.is_available()))
 	# make model CUDA
 	if torch.cuda.is_available():
-		model.cuda()
-		model_next_object.cuda()
-		model_predicate.cuda()
-		model_attribute.cuda()
+		model_vgg.cuda()
+		model_frcnn.cuda()
+		model_next_object_main.cuda()
+		model_predicate_main.cuda()
+		model_attribute_main.cuda()
+		model_next_object_target.cuda()
+		model_predicate_target.cuda()
+		model_attribute_target.cuda()
 
 	# keeps track of current scene graphs for images
 	image_states = {}
@@ -202,7 +206,7 @@ def create_state_vector(image_state):
 	else:	
 		curr_subject_feature = torch.from_numpy(entity_features[curr_subject])
 	# find object for this state if object is none
-	if image_state.current_object = None:
+	if image_state.current_object == None:
 		curr_object_id = find_object_neighbors(image_state.entity_proposals[image_state.current_subject], image_state.entity_propoals, image_state.objects_count_per_subject[image_state.current_subject])[0]
 		image_state.current_object = current_object_id
 	curr_object_feature = image_state.entity_features[image_state.current_object]
@@ -241,7 +245,7 @@ if __name__=='__main__':
 	parser.add_argument("--learning_rate", type=float, default=0.0007, help="learning rate")
 	parser.add_argument("--epsilon_start", type=float, default=1, help="epsilon starting value (used in epsilon greedy)")
 	parser.add_argument("--epsilon_anneal_rate", type=float, default=0.045, help="factor to anneal epsilon by")
-	parser.add_argument("--epsion_end", type=float, default=0.1, help="minimum value of epsilon (when we can stop annealing)")
+	parser.add_argument("--epsilon_end", type=float, default=0.1, help="minimum value of epsilon (when we can stop annealing)")
 	parser.add_argument("--target_update_frequency", type=int, default=10000, help="how often to update the target")
 	parser.add_argument("--replay_buffer_capacity", type=int, default=20000, help="maximum size of the replay buffer")
 	parser.add_argument("--replay_buffer_minimum_number_samples", type=int, default=500, help="Minimum replay buffer size before we can sample")
@@ -254,7 +258,7 @@ if __name__=='__main__':
 	# saving parameters in variables
 	num_epochs = args.num_epochs
 	batch_size = args.batch_size
-	discount_factor = args.discout_factor
+	discount_factor = args.discount_factor
 	learning_rate = args.learning_rate
 	epsilon_start = args.epsilon_start
 	epsilon_anneal_rate = args.epsilon_anneal_rate
@@ -291,9 +295,9 @@ if __name__=='__main__':
 	# TODO: The paper says this optimizer is shared. Right now
 	# the optimizers are not shared. Need to implement version
 	# where it is shared
-	optimizer_next_object = optim.RMSprop(DQN_next_object_main.parameters())
-	optimizer_predicate = optim.RMSprop(DQN_predicate_main.parameters())
-	optimizer_attribute = optim.RMSprop(DQN_attribute_main.parameters())
+	optimizer_next_object = torch.optim.RMSprop(DQN_next_object_main.parameters())
+	optimizer_predicate = torch.optim.RMSprop(DQN_predicate_main.parameters())
+	optimizer_attribute = torch.optim.RMSprop(DQN_attribute_main.parameters())
 
 	# create replay buffer
 	replay_buffer = ReplayMemory(replay_buffer_capacity, replay_buffer_minimum_number_samples)
