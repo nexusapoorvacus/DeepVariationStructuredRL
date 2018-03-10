@@ -4,27 +4,25 @@ import os
 import sys
 
 IMAGE_DIR = "data/images/"
-OUTPUT_DATA_SAMPLE_FILE = "data/data_samples.json"
-SCENE_GRAPH_DATA  = "data/scene_graphs.json"
-ATTRIBUTE_DATA = "data/attributes.json"
-NUM_IMAGES = 10
+OUTPUT_TRAIN_DATA_FILE = "data/data_samples/train_data.json"
+OUTPUT_VALIDATION_DATA_FILE = "data/data_samples/validation_data.json"
+OUTPUT_TEST_DATA_FILE = "data/data_samples/test_data.json"
+SCENE_GRAPH_DATA  = "data/raw_data/scene_graphs.json"
+ATTRIBUTE_DATA = "data/raw_data/attributes.json"
+NUM_IMAGES_TRAIN = 10
+NUM_IMAGES_VALIDATION = 5
+NUM_IMAGES_TEST = 5
 
 def create_data_sample_file():
-    file_to_write = open(OUTPUT_DATA_SAMPLE_FILE, "w")
     images = []
-    for im_name in os.listdir(IMAGE_DIR)[:NUM_IMAGES]:
+    for im_name in os.listdir(IMAGE_DIR)[:NUM_IMAGES_TRAIN + NUM_IMAGES_VALIDATION + NUM_IMAGES_TEST]:
         im_number = int(im_name[:-4])
         labels = scene_graph_information[image_to_id_mapping_SG[im_number]]
-        for o, obj in enumerate(labels["objects"]):
-            for obj_a in attribute_information[image_to_id_mapping_attr[im_number]]["attributes"]:
-                if obj["object_id"] == obj_a["object_id"]:
-                    labels["objects"][o]["attributes"] = obj_a["attributes"]
-                    break
         im_data = {"image_name": im_name, "labels": labels}
         images.append(im_data)
     return images
 
-def add_attributes_to_labels():
+def add_attributes_to_labels(data):
     new_data = []
     for im in data:
         im_name = im["image_name"]
@@ -55,35 +53,58 @@ def create_image_to_id_mapping_attr():
     return image_to_id_mapping_attr
     
 if __name__ == "__main__":
-    # flags
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-s", "--add_scene_graph_labels", help="adds scene graph labels to data samples",
+	# flags
+	parser = argparse.ArgumentParser()
+	parser.add_argument("-s", "--add_scene_graph_labels", help="adds scene graph labels to data samples",
                     action="store_true")
-    parser.add_argument("-a", "--add_attribute_labels", help="adds attribute labels to the data samples",
+	parser.add_argument("-a", "--add_attribute_labels", help="adds attribute labels to the data samples",
                     action="store_true")
-    args = parser.parse_args()
-    
-    if args.add_scene_graph_labels:
-        print("Loading scene graph file")
-        scene_graph_information = json.load(open(SCENE_GRAPH_DATA))
-        print("Done!")
-        image_to_id_mapping_SG = create_image_to_id_mapping_SG()
-        data = create_data_sample_file()
-    elif args.add_attribute_labels:
-        # make sure data_samples.pickle file is available
-        if not os.path.isfile("data_samples.json"):
-            print("You must run this file with the --add_scene_graph_labels flag before running with --add_attribute_labels flag")
-            sys.exit(0)
-        with open('data_samples.json') as data_file:
-            data = json.load(data_file)
-        print("Loading attributes file")
-        attribute_information = attribute_information = json.load(open(ATTRIBUTE_DATA))
-        print("Done!")
-        image_to_id_mapping_attr = create_image_to_id_mapping_attr()
-        data = add_attributes_to_labels(data)
-    else:
-        print("Run with either the -s or -a flag. Do not use both flags at the same time.")
-    
-    # save as pickle object
-    with open('data_samples.json', 'w') as outfile:
-        json.dump(data, outfile)
+	args = parser.parse_args()
+
+	if args.add_scene_graph_labels:
+		print("Loading scene graph file")
+		scene_graph_information = json.load(open(SCENE_GRAPH_DATA))
+		print("Done!")
+		image_to_id_mapping_SG = create_image_to_id_mapping_SG()
+		data = create_data_sample_file()
+
+		# save as json
+		with open(OUTPUT_TRAIN_DATA_FILE, 'w') as outfile:
+			json.dump(data[:NUM_IMAGES_TRAIN], outfile)
+		with open(OUTPUT_VALIDATION_DATA_FILE, 'w') as outfile:
+			json.dump(data[NUM_IMAGES_TRAIN:NUM_IMAGES_TRAIN + NUM_IMAGES_VALIDATION], outfile)
+		with open(OUTPUT_TEST_DATA_FILE, 'w') as outfile:
+			json.dump(data[NUM_IMAGES_TRAIN + NUM_IMAGES_VALIDATION:], outfile)
+	elif args.add_attribute_labels:
+		# make sure data_samples.pickle file is available
+		if not os.path.isfile(OUTPUT_TRAIN_DATA_FILE):
+			print("You must run this file with the --add_scene_graph_labels flag before running with --add_attribute_labels flag")
+			sys.exit(0)
+		with open(OUTPUT_TRAIN_DATA_FILE) as data_file:
+			data_train = json.load(data_file)
+		if not os.path.isfile(OUTPUT_VALIDATION_DATA_FILE):
+			print("You must run this file with the --add_scene_graph_labels flag before running with --add_attribute_labels flag")
+			sys.exit(0)
+		with open(OUTPUT_VALIDATION_DATA_FILE) as data_file:
+			data_validation = json.load(data_file)
+		if not os.path.isfile(OUTPUT_TEST_DATA_FILE):
+			print("You must run this file with the --add_scene_graph_labels flag before running with --add_attribute_labels flag")
+			sys.exit(0)
+		with open(OUTPUT_TEST_DATA_FILE) as data_file:
+			data_test = json.load(data_file)
+		print("Loading attributes file")
+		attribute_information = json.load(open(ATTRIBUTE_DATA))
+		print("Done!")
+		image_to_id_mapping_attr = create_image_to_id_mapping_attr()
+		data_train = add_attributes_to_labels(data_train)
+		data_validation = add_attributes_to_labels(data_validation)
+		data_test = add_attributes_to_labels(data_test)
+
+		with open(OUTPUT_TRAIN_DATA_FILE, 'w') as outfile:
+			json.dump(data_train, outfile)
+		with open(OUTPUT_VALIDATION_DATA_FILE, 'w') as outfile:
+			json.dump(data_validation, outfile)
+		with open(OUTPUT_TEST_DATA_FILE, 'w') as outfile:
+			json.dump(data_test, outfile)
+	else:
+		print("Run with either the -s or -a flag. Do not use both flags at the same time.")
