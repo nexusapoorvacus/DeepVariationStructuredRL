@@ -1,7 +1,7 @@
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 from torchvision import transforms
-from dataset import VGDataset
+from dataset import VGDataset, collate
 from models import VGG16, DQN
 from operator import itemgetter
 from faster_rcnn import network
@@ -20,35 +20,37 @@ def train():
 	print("CUDA Available: " + str(torch.cuda.is_available()))
 	# make model CUDA
 	if torch.cuda.is_available():
-		model_vgg.cuda()
-		model_frcnn.cuda()
-		model_next_object_main.cuda()
-		model_predicate_main.cuda()
-		model_attribute_main.cuda()
-		model_next_object_target.cuda()
-		model_predicate_target.cuda()
-		model_attribute_target.cuda()
+		model_VGG = model_vgg.cuda()
+		model_FRCNN = model_frcnn.cuda()
+		#model_next_object_main = DQN_next_object_main.cuda()
+		#model_next_object_target = DQN_next_object_target.cuda()	
+		#model_attribute_main = DQN_attribute_main.cuda()
+		#model_attribute_target = DQN_attribute_target.cuda()
+		#model_predicate_main = DQN_predicate_main.cuda()
+		#model_predicate_target = DQN_predicate_target.cuda()
 
 	# keeps track of current scene graphs for images
 	image_states = {}
 	total_number_timesteps_taken = 0
 
 	for epoch in range(num_epochs):
-		for progress, (image, gt_scene_graph) in enumerate(data_loader):
+		for progress, (images, gt_scene_graph) in enumerate(train_data_loader):
+			images = torch.autograd.Variable(torch.squeeze(images, 1))
 			if torch.cuda.is_available():
-				image.cuda()
-
+				images = images.cuda()
 			# get image features from VGG16
-			images = model_vgg(image)
+			images = model_VGG(images)
 	
 			# iterate through images in batch
 			for idx in range(images.size(0)):
 				# initializing image state if necessary
 				image_name = gt_scene_graph[idx]["image_name"]
-				if image_name not in image_states:	
+				if image_name not in image_states:
 					gt_sg = gt_scene_graph[idx]
-					image_feature = images[idx]
-					entity_proposals, entity_scores, entity_classes = model_frcnn.detect(image, object_detection_threshold)
+					image = images[idx]
+					image_numpy = image.data.cpu().numpy()
+					entity_proposals, entity_scores, entity_classes = model_FRCNN.detect(image_numpy, object_detection_threshold)
+					import pdb; pdb.set_trace()
 					entity_proposals = entity_proposals[:maximum_num_entities_per_image]
 					entity_scores = entity_proposals[:maximum_num_entities_per_image]
 					entity_entity_classes = entity_proposals[:maximum_num_entities_per_image]
@@ -235,7 +237,7 @@ if __name__=='__main__':
 				default="data/data_samples/test_data.json",
 				help='Location of the file containing test data samples')
 	parser.add_argument("--images_dir", type=str,
-				default="data/images/",
+				default="data/VG_100K/",
 				help="Location of Visual Genome images")
 	parser.add_argument("--train", help="trains model", action="store_true")
 	parser.add_argument("--test", help="evaluates model", action="store_true")
@@ -307,15 +309,16 @@ if __name__=='__main__':
 		train_data_samples = json.load(open(args.train_data))
 		train_dataset = VGDataset(train_data_samples, args.images_dir)
 		train_data_loader = DataLoader(dataset=train_dataset, batch_size=args.batch_size,
-									shuffle=True, num_workers=args.num_workers)
+						shuffle=True, num_workers=args.num_workers,
+						collate_fn=collate)
 		validation_data_samples = json.load(open(args.validation_data))
 		validation_dataset = VGDataset(validation_data_samples, args.images_dir)
 		validation_data_loader = DataLoader(dataset=validation_dataset, batch_size=args.batch_size,
 									shuffle=True, num_workers=args.num_workers)
 		train_images_state = train()
 	if args.test:
-		test_data_samples = json.load(open(args.train_data))
-		test_dataset = VGDataset(train_data_samples, args.images_dir)
+		test_data_samples = json.load(open(args.test_data))
+		test_dataset = VGDataset(test_data_samples, args.images_dir)
 		test_data_loader = DataLoader(dataset=test_dataset, batch_size=args.batch_size,
 									shuffle=True, num_workers=args.num_workers)
 		test_images_state = evaluate(test_data_loader)
