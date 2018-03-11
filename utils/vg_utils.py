@@ -1,3 +1,5 @@
+from PIL import Image
+
 OBJECT_ALIAS_FILE = "data/raw_data/object_alias.txt"
 PREDICATE_ALIAS_FILE = "data/raw_data/relationship_alias.txt"
 
