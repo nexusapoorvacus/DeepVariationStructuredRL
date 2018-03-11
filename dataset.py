@@ -3,6 +3,7 @@ from torchvision import transforms
 from PIL import Image
 
 import torch
+import numpy as np
 
 class VGDataset(Dataset):
 
@@ -24,14 +25,16 @@ class VGDataset(Dataset):
 	def __getitem__(self, index):
 		image_dict = self.image_data[index]
 		image_name = image_dict["image_name"]
-		image = Image.open(self.image_dir + image_name)
-		image = self.transform_vgg(image).unsqueeze(0)
-		return image, image_dict
+		image_orig = Image.open(self.image_dir + image_name)
+		image = self.transform_vgg(image_orig).unsqueeze(0)
+		return image, np.array(image_orig), image_dict
 
 def collate(batch):
 	images = []
+	image_origs = []
 	sg_dicts = []
 	for b in batch:
 		images.append(b[0])
-		sg_dicts.append(b[1])
-	return torch.stack(images, 0), sg_dicts
+		image_origs.append(b[1])
+		sg_dicts.append(b[2])
+	return torch.stack(images, 0), image_origs, sg_dicts

@@ -15,6 +15,7 @@ import torch.nn as nn
 import argparse
 import json
 import pickle
+import numpy as np
 
 def train():
 	print("CUDA Available: " + str(torch.cuda.is_available()))
@@ -34,7 +35,7 @@ def train():
 	total_number_timesteps_taken = 0
 
 	for epoch in range(num_epochs):
-		for progress, (images, gt_scene_graph) in enumerate(train_data_loader):
+		for progress, (images, images_orig, gt_scene_graph) in enumerate(train_data_loader):
 			images = torch.autograd.Variable(torch.squeeze(images, 1))
 			if torch.cuda.is_available():
 				images = images.cuda()
@@ -47,16 +48,14 @@ def train():
 				image_name = gt_scene_graph[idx]["image_name"]
 				if image_name not in image_states:
 					gt_sg = gt_scene_graph[idx]
-					image = images[idx]
-					image_numpy = image.data.cpu().numpy()
-					entity_proposals, entity_scores, entity_classes = model_FRCNN.detect(image_numpy, object_detection_threshold)
-					import pdb; pdb.set_trace()
+					image_feature = images[idx]
+					entity_proposals, entity_scores, entity_classes = model_FRCNN.detect(images_orig[idx], object_detection_threshold)
 					entity_proposals = entity_proposals[:maximum_num_entities_per_image]
 					entity_scores = entity_proposals[:maximum_num_entities_per_image]
 					entity_entity_classes = entity_proposals[:maximum_num_entities_per_image]
 					entity_features = []
-					for box in entity_boxes:
-						cropped_entity = crop_box(args.image_dir, image_name, box)
+					for box in entity_proposals:
+						cropped_entity = crop_box(args.images_dir, image_name, box)
 						cropped_entity = transforms.Compose([
 										transforms.Resize((224, 224)),
 										transforms.ToTensor(),
@@ -65,12 +64,12 @@ def train():
 						box_feature.append(entity_features)
 					im_state = ImageState(gt_sg["image_name"], gt_sg, image_feature, entity_features,
 											entity_proposals, entity_classes, entity_scores)
-					im_state.add_entities(entity_proposals, entity_classes, entity_scores)
+					im_state.initialize_entities(entity_proposals, entity_classes, entity_scores)
 					image_states[image_name] = im_state
 				else:
 					# reset image state from last epoch
 					image_states[image_name].reset()
-	
+				
 				while not image.is_done():
 					# get the image state object for image
 					im_state = image_states[image_name]
@@ -251,7 +250,7 @@ if __name__=='__main__':
 	parser.add_argument("--target_update_frequency", type=int, default=10000, help="how often to update the target")
 	parser.add_argument("--replay_buffer_capacity", type=int, default=20000, help="maximum size of the replay buffer")
 	parser.add_argument("--replay_buffer_minimum_number_samples", type=int, default=500, help="Minimum replay buffer size before we can sample")
-	parser.add_argument("--object_detection_threshold", type=float, default=0.7, help="threshold for Faster RCNN module when detecting objects")
+	parser.add_argument("--object_detection_threshold", type=float, default=0.1, help="threshold for Faster RCNN module when detecting objects")
 	parser.add_argument("--maximum_num_entities_per_image", type=int, default=10, help="maximum number of entities to explore per image")
 	parser.add_argument("--maximum_adaptive_action_space_size", type=int, default=20, help="maximum size of adaptive_action space")
 	parser.add_argument("--num_workers", type=int, default=4, help="number of threads")
@@ -273,36 +272,48 @@ if __name__=='__main__':
 	maximum_adaptive_action_space_size = args.maximum_adaptive_action_space_size
 
 	# create semantic action graph
+	print("Loading graph.pickle...")
 	semantic_action_graph = pickle.load(open("graph.pickle", "rb"))
-	
+	print("Done!")	
+
 	# create VGG model for state featurization
+	print("Loading VGG model...")
 	model_vgg = VGG16()
+	print("Done!")
 
 	# create Faster-RCNN model for state featurization
+	print("Loading Fast-RCNN...")
 	model_file = 'VGGnet_fast_rcnn_iter_70000.h5'
 	model_frcnn = FasterRCNN()
 	network.load_net(model_file, model_frcnn)
 	model_frcnn.cuda()
 	model_frcnn.eval()
+	print("Done!")
 
 	# create DQN's for the next object, predicates, and attributes
+	print("Creating DQN models...")
 	DQN_next_object_main = DQN()
 	DQN_next_object_target = DQN()
 	DQN_predicate_main = DQN()
 	DQN_predicate_target = DQN()
 	DQN_attribute_main = DQN()
 	DQN_attribute_target = DQN()
+	print("Done!")
 
 	# create shared optimizer
 	# TODO: The paper says this optimizer is shared. Right now
 	# the optimizers are not shared. Need to implement version
 	# where it is shared
+	print("Creating optimizers...")
 	optimizer_next_object = torch.optim.RMSprop(DQN_next_object_main.parameters())
 	optimizer_predicate = torch.optim.RMSprop(DQN_predicate_main.parameters())
 	optimizer_attribute = torch.optim.RMSprop(DQN_attribute_main.parameters())
+	print("Done!")
 
 	# create replay buffer
+	print("Creating replay buffer...")
 	replay_buffer = ReplayMemory(replay_buffer_capacity, replay_buffer_minimum_number_samples)
+	print("Done!")
 
 	# load train data samples
 	if args.train:
