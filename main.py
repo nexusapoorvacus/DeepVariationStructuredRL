@@ -1,6 +1,5 @@
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
-from torchvision import transforms
 from dataset import VGDataset, collate
 from models import VGG16, DQN
 from operator import itemgetter
@@ -9,6 +8,7 @@ from faster_rcnn.faster_rcnn import FasterRCNN
 from image_state import ImageState
 from replay_buffer import ReplayMemory
 from utils.vg_utils import entity_to_aliases, predicate_to_aliases, find_object_neighbors, crop_box
+from PIL import Image
 
 import torch
 import torch.nn as nn
@@ -23,12 +23,12 @@ def train():
 	if torch.cuda.is_available():
 		model_VGG = model_vgg.cuda()
 		model_FRCNN = model_frcnn.cuda()
-		#model_next_object_main = DQN_next_object_main.cuda()
-		#model_next_object_target = DQN_next_object_target.cuda()	
-		#model_attribute_main = DQN_attribute_main.cuda()
-		#model_attribute_target = DQN_attribute_target.cuda()
-		#model_predicate_main = DQN_predicate_main.cuda()
-		#model_predicate_target = DQN_predicate_target.cuda()
+		model_next_object_main = DQN_next_object_main.cuda()
+		model_next_object_target = DQN_next_object_target.cuda()	
+		model_attribute_main = DQN_attribute_main.cuda()
+		model_attribute_target = DQN_attribute_target.cuda()
+		model_predicate_main = DQN_predicate_main.cuda()
+		model_predicate_target = DQN_predicate_target.cuda()
 
 	# keeps track of current scene graphs for images
 	image_states = {}
@@ -51,48 +51,65 @@ def train():
 					image_feature = images[idx]
 					entity_proposals, entity_scores, entity_classes = model_FRCNN.detect(images_orig[idx], object_detection_threshold)
 					entity_proposals = entity_proposals[:maximum_num_entities_per_image]
-					entity_scores = entity_proposals[:maximum_num_entities_per_image]
-					entity_entity_classes = entity_proposals[:maximum_num_entities_per_image]
+					entity_scores = entity_scores[:maximum_num_entities_per_image]
+					entity_classes = entity_classes[:maximum_num_entities_per_image]
+					if len(entity_scores) < 2:
+						continue
+
 					entity_features = []
 					for box in entity_proposals:
-						cropped_entity = crop_box(args.images_dir, image_name, box)
-						cropped_entity = transforms.Compose([
-										transforms.Resize((224, 224)),
-										transforms.ToTensor(),
-										transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-						box_feature = VGG16(cropped_entity)
-						box_feature.append(entity_features)
+						cropped_entity = crop_box(images_orig[idx], box)
+						cropped_entity = torch.autograd.Variable(cropped_entity)
+						if torch.cuda.is_available():
+							cropped_entity = cropped_entity.cuda()
+						box_feature = model_VGG(cropped_entity)
+						entity_features.append(box_feature)
 					im_state = ImageState(gt_sg["image_name"], gt_sg, image_feature, entity_features,
-											entity_proposals, entity_classes, entity_scores)
+											entity_proposals, entity_classes, entity_scores, semantic_action_graph)
 					im_state.initialize_entities(entity_proposals, entity_classes, entity_scores)
 					image_states[image_name] = im_state
 				else:
 					# reset image state from last epoch
 					image_states[image_name].reset()
-				
-				while not image.is_done():
+				im_state = image_states[image_name]	
+				while not im_state.is_done():
+					print("Iter for image " + str(image_name))
 					# get the image state object for image
 					im_state = image_states[image_name]
 	
+					print("Computing state vector")
 					# compute state vector of image
 					state_vector = create_state_vector(im_state)
-					subject_id = image_state.current_subject
-					object_id = image_state.current_object
+					subject_id = im_state.current_subject
+					object_id = im_state.current_object
+					print("Done!")
+					if type(state_vector) == type(None):
+						import pdb; pdb.set_trace()
+						if im_state.current_subject == None:
+							break
+						else:
+							im_state.explored_entities.append(im_state.current_subject)
+							im_state.current_subject = None
+							im_state.current_object = None
+							continue
 
 					# perform variation structured traveral scheme to get adaptive actions
+					import pdb; pdb.set_trace()
 					subject_name = entity_to_aliases(im_state.entity_classes[subject_id])
 					object_name = entity_to_aliases(im_state.entity_classes[object_id])
 					subject_bbox = im_state.entity_proposals[subject_id]
-					previously_mined_attributes = im_state.previously_mined_attributes[subject_name]
-					previously_mined_next_objects = im_state.previously_mined_next_objects[subject_name]
-					predicate_adaptive_actions, attribute_adaptive_actions = semantic_action_graph.variation_based_traveral(subject_name, 
-																							object_name, previously_mined_attributes)
+					previously_mined_attributes = im_state.current_scene_graph["objects"][subject_id]["attributes"]
+					previously_mined_next_objects = im_state.objects_explored_per_subject[subject_id]
+					predicate_adaptive_actions, attribute_adaptive_actions = semantic_action_graph.variation_based_traversal(subject_name, object_name, previously_mined_attributes)
 					next_object_adaptive_actions = find_object_neighbors(subject_bbox, im_state.entity_proposals, previously_mined_next_objects)
 						
 					# creating state + action vectors to feed in DQN
-					attribute_state_vectors = torch.concat([state_vector, torch.from_numpy(np.identity(len(attribute_adaptive_actions)))], 1)
-					predicate_state_vectors = torch.concat([state_vector, torch.from_numpy(np.identity(len(predicate_adaptive_actions)))], 1)
-					next_object_state_vectors = torch.concat([state_vector, torch.from_numpy(np.identity(len(next_object_adaptive_actions)))], 1)
+					if len(attribute_adaptive_actions) > 0:
+						attribute_state_vectors = torch.concat([state_vector, torch.from_numpy(np.identity(len(attribute_adaptive_actions)))], 1)
+					if len(predicate_adaptive_actions) > 0:
+						predicate_state_vectors = torch.concat([state_vector, torch.from_numpy(np.identity(len(predicate_adaptive_actions)))], 1)
+					if len(next_object_adaptive_actions) > 0:
+						next_object_state_vectors = torch.concat([state_vector, torch.from_numpy(np.identity(len(next_object_adaptive_actions)))], 1)
 	
 					# choose action using epsilon greedy
 					attribute_action = choose_action_epsilon_greedy(attribute_state_vectors, attribute_adaptive_actions, model_attribute_main, epsilon, training=replay_buffer.can_sample())
@@ -182,9 +199,9 @@ def train():
 	
 					# update target weights if it has been tao steps
 					if total_number_timesteps_taken % target_update_frequency == 0:
-						update_target(model_attribute, model_attribute_target)
-						update_target(model_predicate, model_predicate_target)
-						update_target(model_next_object, model_next_object_target)
+						update_target(model_attribute_main, model_attribute_target)
+						update_target(model_predicate_main, model_predicate_target)
+						update_target(model_next_object_main, model_next_object_target)
 			
 		# evaluate statistics on validation set
 		evaluate(validation_data_loader)
@@ -194,24 +211,30 @@ def evaluate(data_loader):
 
 def create_state_vector(image_state):
 	# find subject to start with if curr_subject is None
-	if image_state.current_subject == None or len(image_state.objects_count_per_subject[image_state.current_subject]) >= image_state.max_objects_to_explore:
-		indices, sorted_scores = zip(*sorted(enumerate(image_state.entity_scores), key=iitemgetter(1)))
+	if image_state.current_subject == None or len(image_state.objects_explored_per_subject[image_state.current_subject]) >= image_state.max_objects_to_explore:
 		curr_subject_feature = None
-		for idx in indices:
+		for idx in range(len(image_state.entity_scores)):
 			if idx not in image_state.explored_entities:
-				curr_subject_feature = torch.from_numpy(entity_features[idx])
+				curr_subject_feature = image_state.entity_features[idx]
 				image_state.explored_entities.append(idx)
-				image_state.objects_count_per_subject[idx] += 1
-		if curr_subject_feature == None:
-			return False
+				image_state.current_subject = idx
+				break
+		if type(curr_subject_feature) == type(None):
+			return None
 	else:	
-		curr_subject_feature = torch.from_numpy(entity_features[curr_subject])
+		curr_subject_feature = image_state.entity_features[image_state.current_subject]
 	# find object for this state if object is none
 	if image_state.current_object == None:
-		curr_object_id = find_object_neighbors(image_state.entity_proposals[image_state.current_subject], image_state.entity_propoals, image_state.objects_count_per_subject[image_state.current_subject])[0]
-		image_state.current_object = current_object_id
+		curr_object_id =  len(image_state.objects_explored_per_subject[image_state.current_subject])
+		if curr_object_id == image_state.current_subject:
+			curr_object_id += 1
+		#curr_object_id = find_object_neighbors(image_state.entity_proposals[image_state.current_subject], image_state.entity_proposals, image_state.objects_explored_per_subject[image_state.current_subject])
+		if curr_object_id >= len(image_state.entity_scores):
+			return None
+		image_state.current_object = curr_object_id
+		#image_state.current_object = curr_object_id[0]
 	curr_object_feature = image_state.entity_features[image_state.current_object]
-	return torch.cat([image_feature, curr_subject_feature, curr_object_feature], 1)
+	return torch.cat([torch.squeeze(image_state.image_feature), torch.squeeze(curr_subject_feature), torch.squeeze(curr_object_feature)])
 
 def choose_action_epsilon_greedy(state, adaptive_action_set, model, epsilon, training=False):
 	sample = random.random()
@@ -250,7 +273,7 @@ if __name__=='__main__':
 	parser.add_argument("--target_update_frequency", type=int, default=10000, help="how often to update the target")
 	parser.add_argument("--replay_buffer_capacity", type=int, default=20000, help="maximum size of the replay buffer")
 	parser.add_argument("--replay_buffer_minimum_number_samples", type=int, default=500, help="Minimum replay buffer size before we can sample")
-	parser.add_argument("--object_detection_threshold", type=float, default=0.1, help="threshold for Faster RCNN module when detecting objects")
+	parser.add_argument("--object_detection_threshold", type=float, default=0.005, help="threshold for Faster RCNN module when detecting objects")
 	parser.add_argument("--maximum_num_entities_per_image", type=int, default=10, help="maximum number of entities to explore per image")
 	parser.add_argument("--maximum_adaptive_action_space_size", type=int, default=20, help="maximum size of adaptive_action space")
 	parser.add_argument("--num_workers", type=int, default=4, help="number of threads")

@@ -68,10 +68,12 @@ class ImageState():
                 self.current_scene_graph["relationships"].append(relationship_dict)
 
         def is_done(self):
-                # returns true if we are done building a scene graph for this image
-                if len(self.explored_entities) == len(self.entity_classes):
-                    return True
-                return False
+				# returns true if we are done building a scene graph for this image
+				if len(self.entity_classes) <= 1:
+					return True
+				if len(self.explored_entities) == len(self.entity_classes):
+					return True
+				return False
 
         def reset(self):
                 self.current_scene_graph = {"relationships": [], "objects": []}
