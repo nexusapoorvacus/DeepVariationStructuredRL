@@ -16,8 +16,9 @@ import argparse
 import json
 import pickle
 import numpy as np
+import random
 
-def train():
+def train(parameters):
 	print("CUDA Available: " + str(torch.cuda.is_available()))
 	# make model CUDA
 	if torch.cuda.is_available():
@@ -94,44 +95,60 @@ def train():
 							continue
 
 					# perform variation structured traveral scheme to get adaptive actions
-					import pdb; pdb.set_trace()
 					subject_name = entity_to_aliases(im_state.entity_classes[subject_id])
 					object_name = entity_to_aliases(im_state.entity_classes[object_id])
 					subject_bbox = im_state.entity_proposals[subject_id]
 					previously_mined_attributes = im_state.current_scene_graph["objects"][subject_id]["attributes"]
 					previously_mined_next_objects = im_state.objects_explored_per_subject[subject_id]
-					predicate_adaptive_actions, attribute_adaptive_actions = semantic_action_graph.variation_based_traversal(subject_name, object_name, previously_mined_attributes)
+					attribute_adaptive_actions, predicate_adaptive_actions = semantic_action_graph.variation_based_traversal(subject_name, object_name, previously_mined_attributes)
 					next_object_adaptive_actions = find_object_neighbors(subject_bbox, im_state.entity_proposals, previously_mined_next_objects)
 						
 					# creating state + action vectors to feed in DQN
-					if len(attribute_adaptive_actions) > 0:
-						attribute_state_vectors = torch.concat([state_vector, torch.from_numpy(np.identity(len(attribute_adaptive_actions)))], 1)
-					if len(predicate_adaptive_actions) > 0:
-						predicate_state_vectors = torch.concat([state_vector, torch.from_numpy(np.identity(len(predicate_adaptive_actions)))], 1)
-					if len(next_object_adaptive_actions) > 0:
-						next_object_state_vectors = torch.concat([state_vector, torch.from_numpy(np.identity(len(next_object_adaptive_actions)))], 1)
-	
+					attr_action_len = len(attribute_adaptive_actions)
+					pred_action_len = len(predicate_adaptive_actions)
+					next_object_action_len = len(next_object_adaptive_actions)
+					
+					identity_attr = torch.autograd.Variable(torch.from_numpy(np.identity(attr_action_len)).float()) if attr_action_len > 0 else None
+					identity_pred = torch.autograd.Variable(torch.from_numpy(np.identity(pred_action_len)).float()) if pred_action_len > 0 else None
+					identity_next_object = torch.autograd.Variable(torch.from_numpy(np.identity(next_object_action_len)).float()) if next_object_action_len > 0 else None
+		
+					if torch.cuda.is_available():
+						identity_attr = identity_attr.cuda() if attr_action_len > 0 else None
+						identity_pred = identity_pred.cuda() if pred_action_len > 0 else None
+						identity_next_object = identity_next_object.cuda() if next_object_action_len > 0 else None
+					
+					attribute_state_vectors, predicate_state_vectors, next_object_state_vectors = None, None, None
+					if attr_action_len > 0:
+						attribute_state_vectors = torch.cat([state_vector.repeat(attr_action_len, 1), identity_attr], 1)
+					if pred_action_len > 0:
+						predicate_state_vectors = torch.cat([state_vector.repeat(pred_action_len, 1), identity_pred], 1)
+					if next_object_action_len > 0:
+						next_object_state_vectors = torch.cat([state_vector.repeat(next_object_action_len, 1), identity_next_object], 1)
+
 					# choose action using epsilon greedy
-					attribute_action = choose_action_epsilon_greedy(attribute_state_vectors, attribute_adaptive_actions, model_attribute_main, epsilon, training=replay_buffer.can_sample())
-					predicate_action = choose_action_epsilon_greedy(predicate_state_vectors, predicate_adaptive_actions, model_predicate_main, epsilon, training=replay_buffer.can_sample())
-					next_object_action = choose_action_epsilon_greedy(next_object_state_vectors, next_object_adaptive_actions, model_next_object_main, epsilon, training=replay_buffer.can_sample())
-	
+					attribute_action, predicate_action, next_object_action = None, None, None
+					if type(attribute_state_vectors) != type(None):
+						attribute_action = choose_action_epsilon_greedy(attribute_state_vectors, attribute_adaptive_actions, model_attribute_main, parameters["epsilon"], training=replay_buffer.can_sample())
+					if type(predicate_state_vectors) != type(None):
+						predicate_action = choose_action_epsilon_greedy(predicate_state_vectors, predicate_adaptive_actions, model_predicate_main, parameters["epsilon"], training=replay_buffer.can_sample())
+					if type(next_object_state_vectors) != type(None):
+						next_object_action = choose_action_epsilon_greedy(next_object_state_vectors, next_object_adaptive_actions, model_next_object_main, parameters["epsilon"], training=replay_buffer.can_sample())
 					# step image_state
-					attribute_reward, predicate_reward, next_object_reward, done = image_state.step(attribute_action, predicate_action, next_object_action)
+					attribute_reward, predicate_reward, next_object_reward, done = im_state.step(attribute_action, predicate_action, next_object_action)
 					next_state = create_state_vector(im_state)
 					image_states[image_name] = next_state		
 		
 					# decay epsilon
-					if epsilon > epsilon_end:
-						epsilon = epsilon * epsilon_decay
+					if parameters["epsilon"] > parameters["epsilon_end"]:
+						parameters["epsilon"] = parameters["epsilon"] * parameters["epsilon_anneal_rate"]
 	
 					# add transition tuple to replay buffer
-					replay_buffer.push(state_vector, attribute_adaptive_actions, predicate_adaptive_actions, next_object_adaptive_actions, next_state, attribute_reward, 
-										predicate_reward, next_object_reward, done)
+					# TODO: placeholder for where to continue debugging
+					replay_buffer.push(state_vector, next_state, attribute_adaptive_actions, predicate_adaptive_actions, next_object_adaptive_actions, attribute_reward, predicate_reward, next_object_reward, done)
 	
 					# sample minibatch if replay_buffer has enough samples
 					if replay_buffer.can_sample():
-						minibatch_transitions = replay_buffer.sample(minibatch_size)
+						minibatch_transitions = replay_buffer.sample(parameters["batch_size"])
 						main_q_attribute_list, main_q_predicate_list, main_q_next_object_list = [], [], []
 						target_q_attribute_list, target_q_predicate_list, target_q_next_object_list = [], [], []
 						for transition in minibatch_transitions:
@@ -141,6 +158,7 @@ def train():
 								target_q_predicate = transition.predicate_reward
 								target_q_next_object = transition.target_q_next_object
 							else:
+								
 								next_state_attribute = torch.concat([transition.next_state, 
 															torch.from_numpy(np.identity(len(transition.next_state_attribute_actions)))], 1)
 								next_state_predicate = torch.concat([transition.next_state, 
@@ -267,7 +285,7 @@ if __name__=='__main__':
 	parser.add_argument("--batch_size", type=int, default=64, help="batch size to use")
 	parser.add_argument("--discount_factor", type=float, default=0.9, help="discount factor")
 	parser.add_argument("--learning_rate", type=float, default=0.0007, help="learning rate")
-	parser.add_argument("--epsilon_start", type=float, default=1, help="epsilon starting value (used in epsilon greedy)")
+	parser.add_argument("--epsilon", type=float, default=1, help="epsilon starting value (used in epsilon greedy)")
 	parser.add_argument("--epsilon_anneal_rate", type=float, default=0.045, help="factor to anneal epsilon by")
 	parser.add_argument("--epsilon_end", type=float, default=0.1, help="minimum value of epsilon (when we can stop annealing)")
 	parser.add_argument("--target_update_frequency", type=int, default=10000, help="how often to update the target")
@@ -284,7 +302,7 @@ if __name__=='__main__':
 	batch_size = args.batch_size
 	discount_factor = args.discount_factor
 	learning_rate = args.learning_rate
-	epsilon_start = args.epsilon_start
+	epsilon = args.epsilon
 	epsilon_anneal_rate = args.epsilon_anneal_rate
 	epsilon_end = args.epsilon_end
 	target_update_frequency = args.target_update_frequency
@@ -293,6 +311,16 @@ if __name__=='__main__':
 	object_detection_threshold = args.object_detection_threshold
 	maximum_num_entities_per_image = args.maximum_num_entities_per_image
 	maximum_adaptive_action_space_size = args.maximum_adaptive_action_space_size
+
+	parameters = {"num_epochs": num_epochs, "batch_size": batch_size, "discount_factor": discount_factor,
+			"learning_rate": learning_rate, "epsilon": epsilon, 
+			"epsilon_anneal_rate": epsilon_anneal_rate, "epsilon_end": epsilon_end, 
+			"target_update_frequency":target_update_frequency, 
+			"replay_buffer_capacity":replay_buffer_capacity,
+			"replay_buffer_minimum_number_samples": replay_buffer_minimum_number_samples,
+			"object_detection_threshold": object_detection_threshold,
+			"maximum_num_entities_per_image": maximum_num_entities_per_image,
+			"maximum_adaptive_action_space_size": maximum_adaptive_action_space_size}
 
 	# create semantic action graph
 	print("Loading graph.pickle...")
@@ -349,7 +377,7 @@ if __name__=='__main__':
 		validation_dataset = VGDataset(validation_data_samples, args.images_dir)
 		validation_data_loader = DataLoader(dataset=validation_dataset, batch_size=args.batch_size,
 									shuffle=True, num_workers=args.num_workers)
-		train_images_state = train()
+		train_images_state = train(parameters)
 	if args.test:
 		test_data_samples = json.load(open(args.test_data))
 		test_dataset = VGDataset(test_data_samples, args.images_dir)
