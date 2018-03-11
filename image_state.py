@@ -2,10 +2,12 @@ from collections import defaultdict
 
 class ImageState():
 
-	def __init__(self, image_name, gt_scene_graph, image_feature, entity_features, entity_proposals, entity_classes, entity_scores):
+	def __init__(self, image_name, gt_scene_graph, image_feature, entity_features, entity_proposals, entity_classes, entity_scores, graph):
 		self.image_name = image_name
 		self.gt_scene_graph = gt_scene_graph
 		self.current_scene_graph = {"relationships": [], "objects": []}
+		self.graph = graph
+
 		# number of objects to explore for a subject
 		self.max_objects_to_explore = 5
 		self.objects_explored_per_subject = defaultdict(list)
@@ -48,7 +50,7 @@ class ImageState():
         def add_attribute(self, object_id, attribute_name):
                 # NOTE: object_id is the id for this particular image
                 #	attribute_id is the id from the SAG
-                attribute_name = graph.attribute_nodes[attribute_id].name
+                attribute_name = self.graph.attribute_nodes[attribute_id].name
                 for object_dict in self.current_scene_graph["objects"]:
                     if object_dict["object_id"] == object_id:
                         object_dict["attributes"].append(attribute_name)
@@ -84,10 +86,10 @@ class ImageState():
                 # should return reward_attribute, reward_predicate, and 
                 # reward_next_object, and boolean indicating whether done
                 reward_attribute, reward_predicate, reward_next_object = -1, -1, -1 
-                pred_attribute_name = graph.attribute_nodes[attribute_action].name
-                pred_predicate_name = graph.predicate_nodes[predicate_id].name
+                pred_attribute_name = self.graph.attribute_nodes[attribute_action].name
+                pred_predicate_name = self.graph.predicate_nodes[predicate_id].name
 
-                self.add_attribute(self.current_subject, pred_attribute_name):
+                self.add_attribute(self.current_subject, pred_attribute_name)
                 self.add_predicate(self.current_subject, pred_predicate_name, self.current_object)
                 self.objects_explored_per_subject[self.current_subject].append(self.current_object)
                 
@@ -118,7 +120,7 @@ class ImageState():
             gt_index = -1
             for index, obj_dict in enumerate(self.gt_scene_graph["objects"]):
                 if obj_dict["name"] == entity["name"]:
-                        if bbox_overlap([entity["x"], entity["y"], entity["w"], entity["h"]],\
+                        if self.bbox_overlap([entity["x"], entity["y"], entity["w"], entity["h"]],\
                                 [obj_dict["x"], obj_dict["y"], obj_dict["w"], obj_dict["h"]]) > 0.5:
                             gt_index = index
                             break
@@ -126,7 +128,7 @@ class ImageState():
         '''
         Intersection over union code from https://gist.github.com/vierja/38f93bb8c463dce5500c0adf8648d371
         '''
-        def bb_intersection_over_union(box1, box2):
+        def bbox_overlap(self, box1, box2):
             bx1,by1,bw1,bh1 = box1
             bx2,by2,bw2,bh2 = box2
             # determine the (x, y)-coordinates of the intersection rectangle
