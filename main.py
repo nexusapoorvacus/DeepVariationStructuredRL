@@ -52,7 +52,6 @@ def train(parameters):
 				if image_name not in image_states:
 					gt_sg = gt_scene_graph[idx]
 					image_feature = images[idx]
-<<<<<<< HEAD
 					entity_proposals, entity_scores, entity_classes = [], [], []
 					for obj in gt_scene_graph[idx]["labels"]["objects"]:
 						entity_proposals.append([obj["x"], obj["y"], obj["x"] + obj["w"], obj["y"] + obj["h"]])
@@ -89,11 +88,12 @@ def train(parameters):
 					image_states[image_name].reset()
 				im_state = image_states[image_name]	
 				while not im_state.is_done():
+					
 					print("Iter for image " + str(image_name))
 					# get the image state object for image
 					im_state = image_states[image_name]
 	
-					print("Computing state vector")
+					#print("Computing state vector")
 					# compute state vector of image
 					state_vector = create_state_vector(im_state)
 					subject_id = im_state.current_subject
@@ -108,7 +108,7 @@ def train(parameters):
 							continue
 
 					# perform variation structured traveral scheme to get adaptive actions
-					print("Creating adaptive action sets...")
+					#print("Creating adaptive action sets...")
 					subject_name = entity_to_aliases(im_state.entity_classes[subject_id])
 					object_name = entity_to_aliases(im_state.entity_classes[object_id])
 					subject_bbox = im_state.entity_proposals[subject_id]
@@ -118,13 +118,13 @@ def train(parameters):
 					next_object_adaptive_actions = find_object_neighbors(subject_bbox, im_state.entity_proposals, previously_mined_next_objects)
 						
 					# creating state + action vectors to feed in DQN
-					print("Creating state + action vectors to pass into DQN...")
+					#print("Creating state + action vectors to pass into DQN...")
 					attribute_state_vectors = create_state_action_vector(state_vector, attribute_adaptive_actions, len(semantic_action_graph.attribute_nodes))
 					predicate_state_vectors = create_state_action_vector(state_vector, predicate_adaptive_actions, len(semantic_action_graph.predicate_nodes))
 					next_object_state_vectors = create_state_action_vector(state_vector, next_object_adaptive_actions, parameters["maximum_num_entities_per_image"])
 		
 					# choose action using epsilon greedy
-					print("Choose action using epsilon greedy...")
+					#print("Choose action using epsilon greedy...")
 					attribute_action, predicate_action, next_object_action = None, None, None
 					if type(attribute_state_vectors) != type(None):
 						attribute_action = choose_action_epsilon_greedy(attribute_state_vectors, attribute_adaptive_actions, model_attribute_main, parameters["epsilon"], training=replay_buffer.can_sample())
@@ -141,9 +141,9 @@ def train(parameters):
 					# decay epsilon
 					if parameters["epsilon"] > parameters["epsilon_end"]:
 						parameters["epsilon"] = parameters["epsilon"] * parameters["epsilon_anneal_rate"]
-	
+						print("NEW EPSILON", parameters["epsilon"])	
 					# add transition tuple to replay buffer
-					print("Adding transition tuple to replay buffer...")
+					#print("Adding transition tuple to replay buffer...")
 					subject_name_1 =  entity_to_aliases(im_state.entity_classes[im_state.current_subject])
 					object_name_1 = entity_to_aliases(im_state.entity_classes[im_state.current_object])
 					previously_mined_attributes_1 = im_state.current_scene_graph["objects"][im_state.current_subject]["attributes"]
@@ -155,11 +155,12 @@ def train(parameters):
 	
 					# sample minibatch if replay_buffer has enough samples
 					if replay_buffer.can_sample():
-						print("Sample minibatch of transitions...")
+						#print("Sample minibatch of transitions...")
 						minibatch_transitions = replay_buffer.sample(parameters["batch_size"])
 						main_q_attribute_list, main_q_predicate_list, main_q_next_object_list = [], [], []
 						target_q_attribute_list, target_q_predicate_list, target_q_next_object_list = [], [], []
 						for transition in minibatch_transitions:
+							total_number_timesteps_taken += 1
 							target_q_attribute, target_q_predicate, target_q_next_object = None, None, None
 							if transition.done:
 								target_q_attribute = transition.attribute_reward
@@ -171,14 +172,15 @@ def train(parameters):
 								next_state_next_object = create_state_action_vector(transition.next_state, transition.next_state_next_object_actions, parameters["maximum_num_entities_per_image"])
 								if type(next_state_attribute) != type(None):
 									next_state_attribute.volatile = True
-									output = torch.max(model_attribute_target(next_state_attribute))
+									output = torch.max(model_attribute_target(next_state_attribute))[0]
+									print("output of target model attributes", output)
 									target_q_attribute = transition.attribute_reward + parameters["discount_factor"] * output
 								if type(next_state_predicate) != type(None):
 									next_state_predicate.volatile = True
-									target_q_predicate = transition.predicate_reward + parameters["discount_factor"] * torch.max(model_predicate_target(next_state_predicate))
+									target_q_predicate = transition.predicate_reward + parameters["discount_factor"] * torch.max(model_predicate_target(next_state_predicate))[0]
 								if type(next_state_next_object) != type(None):
 									next_state_next_object.volatile = True
-									target_q_next_object = transition.next_object_reward + parameters["discount_factor"] * torch.max(model_next_object_target(next_state_next_object))
+									target_q_next_object = transition.next_object_reward + parameters["discount_factor"] * torch.max(model_next_object_target(next_state_next_object))[0]
 							# compute loss
 							main_state_attribute = create_state_action_vector(transition.state, transition.attribute_actions, len(semantic_action_graph.attribute_nodes))
 							main_state_predicate = create_state_action_vector(transition.state, transition.predicate_actions, len(semantic_action_graph.predicate_nodes))
@@ -187,6 +189,7 @@ def train(parameters):
 							main_q_attribute, main_q_predicate, main_q_next_object = None, None, None
 							if type(main_state_attribute) != type(None) and type(target_q_attribute) != type(None):	
 								main_q_attribute = transition.attribute_reward + parameters["discount_factor"] * torch.max(model_attribute_main(main_state_attribute))
+								print("main & target preds", main_q_attribute, target_q_attribute)
 								loss_attribute = loss_fn_attribute(main_q_attribute, target_q_attribute)
 								print("Loss attribute: " + str(loss_attribute.data[0]))	
 								optimizer_attribute.zero_grad()	
@@ -217,6 +220,7 @@ def train(parameters):
 
 					# update target weights if it has been tao steps
 					if total_number_timesteps_taken % target_update_frequency == 0:
+						print("UPDATING TARGET NOW")
 						update_target(model_attribute_main, model_attribute_target)
 						update_target(model_predicate_main, model_predicate_target)
 						update_target(model_next_object_main, model_next_object_target)
@@ -274,7 +278,8 @@ def create_state_action_vector(state_vector, action_set, total_set_size):
 
 def choose_action_epsilon_greedy(state, adaptive_action_set, model, epsilon, training=False):
 	sample = random.random()
-	if sample > epsilon and training: # exploit
+	if sample > epsilon and training: # exploiti
+		print("main prediction", adaptive_action_set[int(torch.squeeze(model(state)).max(0)[1].data.cpu().numpy())])
 		return adaptive_action_set[int(torch.squeeze(model(state)).max(0)[1].data.cpu().numpy())]
 	else: # explore
 		return random.choice(adaptive_action_set)
@@ -299,18 +304,18 @@ if __name__=='__main__':
 				help="Location of Visual Genome images")
 	parser.add_argument("--train", help="trains model", action="store_true")
 	parser.add_argument("--test", help="evaluates model", action="store_true")
-	parser.add_argument("--num_epochs", type=int, default=10, help="number of epochs to train on")
+	parser.add_argument("--num_epochs", type=int, default=1, help="number of epochs to train on")
 	parser.add_argument("--batch_size", type=int, default=4, help="batch size to use")
 	parser.add_argument("--discount_factor", type=float, default=0.9, help="discount factor")
 	parser.add_argument("--learning_rate", type=float, default=0.0007, help="learning rate")
 	parser.add_argument("--epsilon", type=float, default=1, help="epsilon starting value (used in epsilon greedy)")
 	parser.add_argument("--epsilon_anneal_rate", type=float, default=0.045, help="factor to anneal epsilon by")
 	parser.add_argument("--epsilon_end", type=float, default=0.1, help="minimum value of epsilon (when we can stop annealing)")
-	parser.add_argument("--target_update_frequency", type=int, default=10000, help="how often to update the target")
+	parser.add_argument("--target_update_frequency", type=int, default=10, help="how often to update the target")
 	parser.add_argument("--replay_buffer_capacity", type=int, default=20000, help="maximum size of the replay buffer")
 	parser.add_argument("--replay_buffer_minimum_number_samples", type=int, default=8, help="Minimum replay buffer size before we can sample")
 	parser.add_argument("--object_detection_threshold", type=float, default=0.005, help="threshold for Faster RCNN module when detecting objects")
-	parser.add_argument("--maximum_num_entities_per_image", type=int, default=10, help="maximum number of entities to explore per image")
+	parser.add_argument("--maximum_num_entities_per_image", type=int, default=5, help="maximum number of entities to explore per image")
 	parser.add_argument("--maximum_adaptive_action_space_size", type=int, default=20, help="maximum size of adaptive_action space")
 	parser.add_argument("--num_workers", type=int, default=4, help="number of threads")
 	args = parser.parse_args()
