@@ -98,7 +98,7 @@ class ImageState():
                
 		gt_subject_index = self.overlaps(self.current_subject)
 		if gt_subject_index != -1: #overlap
-			if pred_attribute_name in self.gt_scene_graph["labels"]["objects"][gt_subject_index]["attributes"]:
+			if "attributes" in self.gt_scene_graph["labels"]["objects"][gt_subject_index] and pred_attribute_name in self.gt_scene_graph["labels"]["objects"][gt_subject_index]["attributes"]:
 				reward_attribute = 1
 			gt_object_index = self.overlaps(self.current_object)
 			if gt_object_index != -1:
@@ -113,7 +113,7 @@ class ImageState():
 			gt_new_object_index = self.overlaps(next_object_action)
 			#self.explored_entities.append(new_object_index)
 			if gt_new_object_index != -1:
-				if next_object_action == gt_new_object_index:
+				if gt_new_object_index not in self.explored_entities:
 					reward_next_object = 5
 			self.current_object = next_object_action
 		else:

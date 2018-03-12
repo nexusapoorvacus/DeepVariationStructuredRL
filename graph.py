@@ -47,15 +47,18 @@ class Semantic_Action_Graph():
 	def variation_based_traversal(self, subject_name, object_name, previously_mined_attributes=[], max_num_to_return=-1):
 		subject_node = self.get_entity_by_name(subject_name)
 		object_node = self.get_entity_by_name(object_name)
+		if subject_node == None:
+			return [], []
 		attributes_to_return = {}
 		for a_edge in subject_node.attribute_edges:
 			if self.attribute_nodes[subject_node.attribute_edges[a_edge].attribute_id].ID not in previously_mined_attributes:
 				attributes_to_return[subject_node.attribute_edges[a_edge].attribute_id] = subject_node.attribute_edges[a_edge].multiplicity
 		predicates_to_return = {}
-		for p_edge in subject_node.predicate_edges:
-			subject_node.attribute_edges[a_edge].multiplicity
-			if subject_node.predicate_edges[p_edge].object_id == object_node.ID:
-				predicates_to_return[subject_node.predicate_edges[p_edge].predicate_id] = subject_node.predicate_edges[p_edge].multiplicity
+		if object_node != None:
+			for p_edge in subject_node.predicate_edges:
+				subject_node.attribute_edges[a_edge].multiplicity
+				if subject_node.predicate_edges[p_edge].object_id == object_node.ID:
+					predicates_to_return[subject_node.predicate_edges[p_edge].predicate_id] = subject_node.predicate_edges[p_edge].multiplicity
 	
 		attributes_to_return = sorted(attributes_to_return.items(), key=lambda x: -x[1])
 		predicates_to_return = sorted(predicates_to_return.items(), key=lambda x: -x[1])
