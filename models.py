@@ -35,3 +35,29 @@ class DQN(nn.Module):
 		x = nn.functional.relu(self.bn2(self.conv2(x)))
 		x = nn.functional.relu(self.bn3(self.conv3(x)))
 		return self.output(x.view(x.size(0), -1))
+
+class DQN_MLP(nn.Module):
+
+	def __init__(self, input_size, output_size, hidden_size=300, num_hidden_layers=5):
+		super(DQN_MLP, self).__init__()
+		self.input_size = input_size
+		self.hidden_size = hidden_size
+		self.output_size = output_size
+		self.num_hidden_layers = num_hidden_layers
+		
+		layers = []
+		layers.append(nn.Linear(input_size, hidden_size))
+		layers.append(nn.ReLU())
+		for i in range(num_hidden_layers):
+			layers.append(nn.Linear(hidden_size, hidden_size))
+			layers.append(nn.ReLU())
+		layers.append(nn.Linear(hidden_size, output_size))
+		self.layers = nn.Sequential(*layers)
+		self.sigmoid = nn.Sigmoid()
+
+	def forward(self, x):
+		return self.sigmoid(self.layers(x))
+
+
+
+

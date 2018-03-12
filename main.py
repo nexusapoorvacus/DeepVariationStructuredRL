@@ -1,7 +1,7 @@
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 from dataset import VGDataset, collate
-from models import VGG16, DQN
+from models import VGG16, DQN, DQN_MLP
 from operator import itemgetter
 from faster_rcnn import network
 from faster_rcnn.faster_rcnn import FasterRCNN
@@ -51,6 +51,7 @@ def train(parameters):
 					gt_sg = gt_scene_graph[idx]
 					image_feature = images[idx]
 					entity_proposals, entity_scores, entity_classes = model_FRCNN.detect(images_orig[idx], object_detection_threshold)
+					# 
 					entity_proposals = entity_proposals[:maximum_num_entities_per_image]
 					entity_scores = entity_scores[:maximum_num_entities_per_image]
 					entity_classes = entity_classes[:maximum_num_entities_per_image]
@@ -104,9 +105,9 @@ def train(parameters):
 						
 					# creating state + action vectors to feed in DQN
 					print("Creating state + action vectors to pass into DQN...")
-					attribute_state_vectors = create_state_action_vector(state_vector, attribute_adaptive_actions)
-					predicate_state_vectors = create_state_action_vector(state_vector, predicate_adaptive_actions)
-					next_object_state_vectors = create_state_action_vector(state_vector, next_object_adaptive_actions)
+					attribute_state_vectors = create_state_action_vector(state_vector, attribute_adaptive_actions, len(semantic_action_graph.attribute_nodes))
+					predicate_state_vectors = create_state_action_vector(state_vector, predicate_adaptive_actions, len(semantic_action_graph.predicate_nodes))
+					next_object_state_vectors = create_state_action_vector(state_vector, next_object_adaptive_actions, parameters["maximum_num_entities_per_image"])
 		
 					# choose action using epsilon greedy
 					print("Choose action using epsilon greedy...")
@@ -150,61 +151,65 @@ def train(parameters):
 								target_q_predicate = transition.predicate_reward
 								target_q_next_object = transition.target_q_next_object
 							else:
-								next_state_attribute = create_state_action_vector(transition.next_state, transition.next_state_attribute_actions)
-								next_state_predicate = create_state_action_vector(transition.next_state, transition.next_state_predicate_actions)
-								next_state_next_object = create_state_action_vector(transition.next_state, transition.next_state_next_object_actions)
-								import pdb; pdb.set_trace()
+								next_state_attribute = create_state_action_vector(transition.next_state, transition.next_state_attribute_actions, len(semantic_action_graph.attribute_nodes))
+								next_state_predicate = create_state_action_vector(transition.next_state, transition.next_state_predicate_actions, len(semantic_action_graph.predicate_nodes))
+								next_state_next_object = create_state_action_vector(transition.next_state, transition.next_state_next_object_actions, parameters["maximum_num_entities_per_image"])
 								if type(next_state_attribute) != type(None):
-									target_q_attribute = transition.attribute_reward + parameters["discount_factor"] * torch.max(model_attribute_target(next_state_attribute))
+									next_state_attribute.volatile = True
+									output = torch.max(model_attribute_target(next_state_attribute))
+									target_q_attribute = transition.attribute_reward + parameters["discount_factor"] * output
 								if type(next_state_predicate) != type(None):
+									next_state_predicate.volatile = True
 									target_q_predicate = transition.predicate_reward + parameters["discount_factor"] * torch.max(model_predicate_target(next_state_predicate))
 								if type(next_state_next_object) != type(None):
+									next_state_next_object.volatile = True
 									target_q_next_object = transition.next_object_reward + parameters["discount_factor"] * torch.max(model_next_object_target(next_state_next_object))
 							# compute loss
-							main_state_attribute = create_state_action_vector(transition.state, transition.attribute_actions)
-							main_state_predicate = create_state_action_vector(transition.state, transition.predicate_actions)
-							main_state_next_object = create_state_action_vector(transition.state, transition.next_object_actions)
-							
-							main_q_attribute = transition.attribute_reward + parameters["discount_factor"] * torch.max(model_attribute_main(main_state_attribute))
-							main_q_predicate = transition.predicate_reward + parameters["discount_factor"] * torch.max(model_predicate_main(main_state_predicate))
-							main_q_next_object = transition.next_object_reward + parameters["discount_factor"] * torch.max(model_next_object_main(main_state_next_object))
-						
+							main_state_attribute = create_state_action_vector(transition.state, transition.attribute_actions, len(semantic_action_graph.attribute_nodes))
+							main_state_predicate = create_state_action_vector(transition.state, transition.predicate_actions, len(semantic_action_graph.predicate_nodes))
+							main_state_next_object = create_state_action_vector(transition.state, transition.next_object_actions, parameters["maximum_num_entities_per_image"])
+
+							main_q_attribute, main_q_predicate, main_q_next_object = None, None, None
+							if type(main_state_attribute) != type(None) and type(target_q_attribute) != type(None):	
+								main_q_attribute = transition.attribute_reward + parameters["discount_factor"] * torch.max(model_attribute_main(main_state_attribute))
+								loss_attribute = loss_fn_attribute(main_q_attribute, target_q_attribute)
+								optimizer_attribute.zero_grad()	
+								loss_attribute.backward()
+								for param in model_attribute_main.parameters():
+									param.grad.data.clamp_(-1, 1)
+								optimizer_attribute.step()
+
+							if type(main_state_predicate) != type(None) and type(target_q_predicate) != type(None):
+								main_q_predicate = transition.predicate_reward + parameters["discount_factor"] * torch.max(model_predicate_main(main_state_predicate))
+								loss_predicate = loss_fn_predicate(main_q_predicate, target_q_predicate)
+								optimizer_predicate.zero_grad()
+								loss_predicate.backward()
+								for param in model_predicate_main.parameters():
+									param.grad.data.clamp_(-1, 1)
+								optimizer_predicate.step()
+
+							if type(main_state_next_object) != type(None) and type(target_q_next_object) != type(None):
+								main_q_next_object = transition.next_object_reward + parameters["discount_factor"] * torch.max(model_next_object_main(main_state_next_object))
+								loss_next_object = loss_fn_next_object(main_q_next_object, target_q_next_object)
+								optimizer_next_object.zero_grad()
+								loss_next_object.backward()
+								for param in model_next_object_main.parameters():
+									param.grad.data.clamp_(-1, 1)
+								optimizer_next_object.step()
+
 							# add to q value lists
-							target_q_attribute_list.append(target_q_attribute)
-							target_q_predicate_list.append(target_q_predicate)
-							target_q_next_object_list.append(target_q_next_object)
-	
-							main_q_attribute_list.append(main_q_attribute)
-							main_q_predicate_list.append(main_q_predicate)
-							main_q_next_object_list.append(main_q_next_object)
-	
-						# calculate loss and optimize model
-						loss_attribute = loss_fn_attribute(torch.FloatTensor(main_q_attribute_list), 
-										torch.FloatTensor(target_q_attribute_list))
-						loss_predicate = loss_fn_predicate(torch.FloatTensor(main_q_predicate_list), 
-										torch.FloatTensor(target_q_predicate_list))
-						loss_next_object = loss_fn_next_object(torch.FloatTensor(main_q_next_object),
-									 	torch.FloatTensor(target_q_next_object))
-					
-						optimizer_attribute.zero_grad()	
-						optimizer_predicate.zero_grad()
-						optimizer_next_object.zero_grad()
-	
-						loss_attribute.backward()
-						loss_predicate.backward()
-						loss_next_object.backward()
-	
-						for param in model_attribute.parameters:
-							param.grad.data.clamp_(-1, 1)
-						for param in model_predicate.parameters:
-							param.grad.data.clamp_(-1, 1)
-						for param in model_next_object.parameters:
-							param.grad.data.clamp_(-1, 1)
-	
-						optimizer_attibute.step()
-						optimizer_predicate.step()
-						optimizer_next_object.step()
-	
+							#if type(target_q_attribute) != type(None) and type(main_q_attribute) != type(None):
+							#	target_q_attribute_list.append(float(target_q_attribute.data.cpu().numpy()[0]))
+							#	main_q_attribute_list.append(float(main_q_attribute.data.cpu().numpy()[0]))
+							#if type(target_q_predicate) != type(None) and type(main_q_predicate) != type(None):
+							#	target_q_predicate_list.append(float(target_q_predicate.data.cpu().numpy()[0]))
+							#	main_q_predicate_list.append(float(main_q_predicate.data.cpu().numpy()[0]))
+							#if type(target_q_next_object) != type(None) and type(main_q_next_object) != type(None):
+							#	target_q_next_object_list.append(float(target_q_next_object.data.cpu().numpy()[0]))
+							#	main_q_next_object_list.append(float(main_q_next_object.data.cpu().numpy()[0]))
+							
+									
+							
 					# update target weights if it has been tao steps
 					if total_number_timesteps_taken % target_update_frequency == 0:
 						update_target(model_attribute_main, model_attribute_target)
@@ -244,21 +249,23 @@ def create_state_vector(image_state):
 	curr_object_feature = image_state.entity_features[image_state.current_object]
 	return torch.cat([torch.squeeze(image_state.image_feature), torch.squeeze(curr_subject_feature), torch.squeeze(curr_object_feature)])
 
-def create_state_action_vector(state_vector, action_set):
+def create_state_action_vector(state_vector, action_set, total_set_size):
 	len_action_set = len(action_set)
 	if len_action_set == 0:
 		return None
 	else:
-		identity = torch.autograd.Variable(torch.from_numpy(np.identity(len_action_set)).float())
+		onehot = torch.FloatTensor(len_action_set, total_set_size)
+		onehot.zero_()
+		onehot.scatter_(1, torch.LongTensor(action_set).view(-1, 1), 1)
+		identity = torch.autograd.Variable(onehot.float())
 		if torch.cuda.is_available():
 			identity = identity.cuda()
 		model_input = torch.cat([state_vector.repeat(len_action_set, 1), identity], 1)
-		return model_input.view(1, 1, model_input.size(0), model_input.size(1))
+		return model_input.view(model_input.size(0), 1, model_input.size(1))
 
 def choose_action_epsilon_greedy(state, adaptive_action_set, model, epsilon, training=False):
 	sample = random.random()
 	if sample > epsilon and training: # exploit
-		import pdb; pdb.set_trace()
 		return adaptive_action_set[model(state).data.max(1)]
 	else: # explore
 		return random.choice(adaptive_action_set)
@@ -345,12 +352,12 @@ if __name__=='__main__':
 
 	# create DQN's for the next object, predicates, and attributes
 	print("Creating DQN models...")
-	DQN_next_object_main = DQN()
-	DQN_next_object_target = DQN()
-	DQN_predicate_main = DQN()
-	DQN_predicate_target = DQN()
-	DQN_attribute_main = DQN()
-	DQN_attribute_target = DQN()
+	DQN_next_object_main = DQN_MLP(2048*3 + parameters["maximum_num_entities_per_image"], 1)
+	DQN_next_object_target = DQN_MLP(2048*3 + parameters["maximum_num_entities_per_image"], 1)
+	DQN_predicate_main = DQN_MLP(2048*3 + len(semantic_action_graph.predicate_nodes), 1)
+	DQN_predicate_target = DQN_MLP(2048*3 + len(semantic_action_graph.predicate_nodes), 1)
+	DQN_attribute_main = DQN_MLP(2048*3 + len(semantic_action_graph.attribute_nodes), 1)
+	DQN_attribute_target = DQN_MLP(2048*3 + len(semantic_action_graph.attribute_nodes), 1)
 	print("Done!")
 
 	# create shared optimizer
@@ -362,6 +369,11 @@ if __name__=='__main__':
 	optimizer_predicate = torch.optim.RMSprop(DQN_predicate_main.parameters())
 	optimizer_attribute = torch.optim.RMSprop(DQN_attribute_main.parameters())
 	print("Done!")
+
+	# define loss functions
+	loss_fn_attribute = nn.MSELoss()
+	loss_fn_predicate = nn.MSELoss()
+	loss_fn_next_object = nn.MSELoss()	
 
 	# create replay buffer
 	print("Creating replay buffer...")

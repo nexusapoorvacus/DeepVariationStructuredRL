@@ -109,7 +109,7 @@ class ImageState():
 						reward_predicate = 1
 						break
 
-		if next_object_action != None:
+		if next_object_action != None and next_object_action < len(self.entity_proposals):
 			gt_new_object_index = self.overlaps(next_object_action)
 			#self.explored_entities.append(new_object_index)
 			if gt_new_object_index != -1:
