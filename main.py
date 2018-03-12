@@ -52,8 +52,16 @@ def train(parameters):
 				if image_name not in image_states:
 					gt_sg = gt_scene_graph[idx]
 					image_feature = images[idx]
-					entity_proposals, entity_scores, entity_classes = model_FRCNN.detect(images_orig[idx], object_detection_threshold)
-					# 
+                                        entity_proposals =[]
+                                        entity_scores = []
+                                        entity_classes = []
+                                        for obj_dict in gt_sg["labels"]["objects"]:
+                                            x1, y1 = obj_dict["x"], obj_dict["y"]
+                                            x2, y2 = x1+ obj_dict["w"], y1+ obj_dict["h"]
+                                            entity_proposals.append([x1,y1,x2,y2])
+                                            entity_classes.append(obj_dict["name"])
+                                            entity_scores.append(1.0)
+                                        #entity_proposals, entity_scores, entity_classes = model_FRCNN.detect(images_orig[idx], object_detection_threshold)
 					entity_proposals = entity_proposals[:maximum_num_entities_per_image]
 					entity_scores = entity_scores[:maximum_num_entities_per_image]
 					entity_classes = entity_classes[:maximum_num_entities_per_image]
