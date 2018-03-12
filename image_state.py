@@ -83,6 +83,7 @@ class ImageState():
 		self.current_object = None
 		self.previously_mined_attributes = defaultdict(lambda: [])
 		self.previously_mined_next_objects = defaultdict(lambda: [])
+		self.initialize_entities(self.entity_proposals, self.entity_classes, self.entity_scores)
 
 	def step(self, attribute_action, predicate_action, next_object_action):
 		# should return reward_attribute, reward_predicate, and 

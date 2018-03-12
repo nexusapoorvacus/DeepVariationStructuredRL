@@ -14,6 +14,7 @@ import torch
 import torch.nn as nn
 import argparse
 import json
+import dill
 import pickle
 import numpy as np
 import random
@@ -36,6 +37,7 @@ def train(parameters):
 	total_number_timesteps_taken = 0
 
 	for epoch in range(num_epochs):
+		print("Epoch: ", epoch)
 		for progress, (images, images_orig, gt_scene_graph) in enumerate(train_data_loader):
 			images = torch.autograd.Variable(torch.squeeze(images, 1))
 			if torch.cuda.is_available():
@@ -121,6 +123,7 @@ def train(parameters):
 					# step image_state
 					print("Step state environment using action...")
 					attribute_reward, predicate_reward, next_object_reward, done = im_state.step(attribute_action, predicate_action, next_object_action)
+					print("Rewards(A,P,O)", attribute_reward, predicate_reward, next_object_reward)
 					next_state = create_state_vector(im_state)		
 					im_state = image_states[image_name]
 					# decay epsilon
@@ -197,19 +200,6 @@ def train(parameters):
 									param.grad.data.clamp_(-1, 1)
 								optimizer_next_object.step()
 
-							# add to q value lists
-							#if type(target_q_attribute) != type(None) and type(main_q_attribute) != type(None):
-							#	target_q_attribute_list.append(float(target_q_attribute.data.cpu().numpy()[0]))
-							#	main_q_attribute_list.append(float(main_q_attribute.data.cpu().numpy()[0]))
-							#if type(target_q_predicate) != type(None) and type(main_q_predicate) != type(None):
-							#	target_q_predicate_list.append(float(target_q_predicate.data.cpu().numpy()[0]))
-							#	main_q_predicate_list.append(float(main_q_predicate.data.cpu().numpy()[0]))
-							#if type(target_q_next_object) != type(None) and type(main_q_next_object) != type(None):
-							#	target_q_next_object_list.append(float(target_q_next_object.data.cpu().numpy()[0]))
-							#	main_q_next_object_list.append(float(main_q_next_object.data.cpu().numpy()[0]))
-							
-									
-							
 					# update target weights if it has been tao steps
 					if total_number_timesteps_taken % target_update_frequency == 0:
 						update_target(model_attribute_main, model_attribute_target)
@@ -218,6 +208,10 @@ def train(parameters):
 			
 		# evaluate statistics on validation set
 		evaluate(validation_data_loader)
+	
+	with open("image_states.pickle", "wb") as handle:
+		pickle.dump(image_states, handle)
+
 
 def evaluate(data_loader):
 	pass
@@ -266,7 +260,7 @@ def create_state_action_vector(state_vector, action_set, total_set_size):
 def choose_action_epsilon_greedy(state, adaptive_action_set, model, epsilon, training=False):
 	sample = random.random()
 	if sample > epsilon and training: # exploit
-		return adaptive_action_set[model(state).data.max(1)]
+		return adaptive_action_set[int(torch.squeeze(model(state)).max(0)[1].data.cpu().numpy())]
 	else: # explore
 		return random.choice(adaptive_action_set)
 
@@ -290,7 +284,7 @@ if __name__=='__main__':
 				help="Location of Visual Genome images")
 	parser.add_argument("--train", help="trains model", action="store_true")
 	parser.add_argument("--test", help="evaluates model", action="store_true")
-	parser.add_argument("--num_epochs", type=int, default=1, help="number of epochs to train on")
+	parser.add_argument("--num_epochs", type=int, default=100, help="number of epochs to train on")
 	parser.add_argument("--batch_size", type=int, default=4, help="batch size to use")
 	parser.add_argument("--discount_factor", type=float, default=0.9, help="discount factor")
 	parser.add_argument("--learning_rate", type=float, default=0.0007, help="learning rate")
