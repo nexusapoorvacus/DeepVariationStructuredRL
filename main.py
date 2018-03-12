@@ -52,6 +52,7 @@ def train(parameters):
 				if image_name not in image_states:
 					gt_sg = gt_scene_graph[idx]
 					image_feature = images[idx]
+<<<<<<< HEAD
 					entity_proposals, entity_scores, entity_classes = [], [], []
 					for obj in gt_scene_graph[idx]["labels"]["objects"]:
 						entity_proposals.append([obj["x"], obj["y"], obj["x"] + obj["w"], obj["y"] + obj["h"]])
