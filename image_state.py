@@ -78,7 +78,7 @@ class ImageState():
 	def reset(self):
 		self.current_scene_graph = {"relationships": [], "objects": []}
 		self.explored_entities = []
-		self.object_counts_per_subject = {}
+		self.objects_explored_per_subject = defaultdict(list)
 		self.current_subject = None
 		self.current_object = None
 		self.previously_mined_attributes = defaultdict(lambda: [])

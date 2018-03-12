@@ -52,7 +52,18 @@ def train(parameters):
 				if image_name not in image_states:
 					gt_sg = gt_scene_graph[idx]
 					image_feature = images[idx]
-					entity_proposals, entity_scores, entity_classes = model_FRCNN.detect(images_orig[idx], object_detection_threshold)
+					entity_proposals, entity_scores, entity_classes = [], [], []
+					for obj in gt_scene_graph[idx]["labels"]["objects"]:
+						entity_proposals.append([obj["x"], obj["y"], obj["x"] + obj["w"], obj["y"] + obj["h"]])
+						entity_scores.append(1)
+						if "name" in obj:
+							entity_classes.append(obj["name"])
+						else:
+							entity_classes.append(obj["names"][0])
+					entity_proposals = np.array(entity_proposals)
+					entity_scores = np.array(entity_scores)
+					entity_classes = np.array(entity_classes)
+					#entity_proposals, entity_scores, entity_classes = model_FRCNN.detect(images_orig[idx], object_detection_threshold)
 					# 
 					entity_proposals = entity_proposals[:maximum_num_entities_per_image]
 					entity_scores = entity_scores[:maximum_num_entities_per_image]
@@ -176,6 +187,7 @@ def train(parameters):
 							if type(main_state_attribute) != type(None) and type(target_q_attribute) != type(None):	
 								main_q_attribute = transition.attribute_reward + parameters["discount_factor"] * torch.max(model_attribute_main(main_state_attribute))
 								loss_attribute = loss_fn_attribute(main_q_attribute, target_q_attribute)
+								print("Loss attribute: " + str(loss_attribute.data[0]))	
 								optimizer_attribute.zero_grad()	
 								loss_attribute.backward()
 								for param in model_attribute_main.parameters():
@@ -186,6 +198,7 @@ def train(parameters):
 								main_q_predicate = transition.predicate_reward + parameters["discount_factor"] * torch.max(model_predicate_main(main_state_predicate))
 								loss_predicate = loss_fn_predicate(main_q_predicate, target_q_predicate)
 								optimizer_predicate.zero_grad()
+								print("Loss predicate: " + str(loss_predicate.data[0]))	
 								loss_predicate.backward()
 								for param in model_predicate_main.parameters():
 									param.grad.data.clamp_(-1, 1)
@@ -195,6 +208,7 @@ def train(parameters):
 								main_q_next_object = transition.next_object_reward + parameters["discount_factor"] * torch.max(model_next_object_main(main_state_next_object))
 								loss_next_object = loss_fn_next_object(main_q_next_object, target_q_next_object)
 								optimizer_next_object.zero_grad()
+								print("Loss next object: " + str(loss_next_object.data[0]))	
 								loss_next_object.backward()
 								for param in model_next_object_main.parameters():
 									param.grad.data.clamp_(-1, 1)
@@ -284,7 +298,7 @@ if __name__=='__main__':
 				help="Location of Visual Genome images")
 	parser.add_argument("--train", help="trains model", action="store_true")
 	parser.add_argument("--test", help="evaluates model", action="store_true")
-	parser.add_argument("--num_epochs", type=int, default=100, help="number of epochs to train on")
+	parser.add_argument("--num_epochs", type=int, default=10, help="number of epochs to train on")
 	parser.add_argument("--batch_size", type=int, default=4, help="batch size to use")
 	parser.add_argument("--discount_factor", type=float, default=0.9, help="discount factor")
 	parser.add_argument("--learning_rate", type=float, default=0.0007, help="learning rate")
