@@ -227,9 +227,13 @@ def train(parameters):
 			
 		# evaluate statistics on validation set
 		evaluate(validation_data_loader)
-	
+	gt_graphs = []
+	our_graphs = []
+	for ims in image_states.values():
+		gt_graphs.append(ims.gt_scene_graph)
+		our_graphs.append(ims.current_scene_graph)	
 	with open("image_states.pickle", "wb") as handle:
-		pickle.dump(image_states, handle)
+		pickle.dump({"gt": gt_graphs, "curr": our_graphs}, handle)
 
 
 def evaluate(data_loader):
@@ -251,7 +255,7 @@ def create_state_vector(image_state):
 		curr_subject_feature = image_state.entity_features[image_state.current_subject]
 	# find object for this state if object is none
 	if image_state.current_object == None:
-		curr_object_id =  len(image_state.objects_explored_per_subject[image_state.current_subject])
+		curr_object_id = len(image_state.objects_explored_per_subject[image_state.current_subject])
 		if curr_object_id == image_state.current_subject:
 			curr_object_id += 1
 		#curr_object_id = find_object_neighbors(image_state.entity_proposals[image_state.current_subject], image_state.entity_proposals, image_state.objects_explored_per_subject[image_state.current_subject])
@@ -304,18 +308,18 @@ if __name__=='__main__':
 				help="Location of Visual Genome images")
 	parser.add_argument("--train", help="trains model", action="store_true")
 	parser.add_argument("--test", help="evaluates model", action="store_true")
-	parser.add_argument("--num_epochs", type=int, default=1, help="number of epochs to train on")
+	parser.add_argument("--num_epochs", type=int, default=5, help="number of epochs to train on")
 	parser.add_argument("--batch_size", type=int, default=4, help="batch size to use")
 	parser.add_argument("--discount_factor", type=float, default=0.9, help="discount factor")
 	parser.add_argument("--learning_rate", type=float, default=0.0007, help="learning rate")
 	parser.add_argument("--epsilon", type=float, default=1, help="epsilon starting value (used in epsilon greedy)")
 	parser.add_argument("--epsilon_anneal_rate", type=float, default=0.045, help="factor to anneal epsilon by")
 	parser.add_argument("--epsilon_end", type=float, default=0.1, help="minimum value of epsilon (when we can stop annealing)")
-	parser.add_argument("--target_update_frequency", type=int, default=10, help="how often to update the target")
+	parser.add_argument("--target_update_frequency", type=int, default=30, help="how often to update the target")
 	parser.add_argument("--replay_buffer_capacity", type=int, default=20000, help="maximum size of the replay buffer")
 	parser.add_argument("--replay_buffer_minimum_number_samples", type=int, default=8, help="Minimum replay buffer size before we can sample")
 	parser.add_argument("--object_detection_threshold", type=float, default=0.005, help="threshold for Faster RCNN module when detecting objects")
-	parser.add_argument("--maximum_num_entities_per_image", type=int, default=5, help="maximum number of entities to explore per image")
+	parser.add_argument("--maximum_num_entities_per_image", type=int, default=500, help="maximum number of entities to explore per image")
 	parser.add_argument("--maximum_adaptive_action_space_size", type=int, default=20, help="maximum size of adaptive_action space")
 	parser.add_argument("--num_workers", type=int, default=4, help="number of threads")
 	args = parser.parse_args()
