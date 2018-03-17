@@ -1,0 +1,53 @@
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="joint.min.css" />
+<style>
+  g text {
+    font-weight: 300;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+  }
+  .object rect{
+    fill:rgba(255,0,0,0.3);
+  }
+  .pred rect{
+    fill:rgba(0,255,0,0.3);
+  }
+  .attr rect{
+    fill:rgba(0,0,255,0.3);
+  }
+</style>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<script src="http://underscorejs.org/underscore-min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/3.10.1/lodash.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/backbone.js/1.3.3/backbone.js"></script>
+<script src="dagre.min.js"></script>
+<script src="graphlib.min.js"></script>
+<script src="joint.min.js"></script>
+</head>
+<body>
+<div class='container'>
+    <div class="row">
+        <div class="col-md-3">
+            <h4> Total Number </h4>
+            <div class='stat_element'>Objects: <span id='num_objects'></span></div>
+            <div class='stat_element'>Attributes: <span id='num_attributes'></span></div>
+            <div class='stat_element'>Relationships: <span id='num_relationships'></span></div>
+        </div>
+    </div>
+    <div id='image-container'></div>
+    <div class="container" id='image-graph'></div>
+</div>
+<script type='text/javascript' src='scene_graph.js'></script>
+<script type='text/javascript' src='render-image-graph.js'></script>
+<script>
+$(document).ready(function() {
+    var image_url = graph.url;
+	$('#num_objects').text(graph.objects.length)
+	$('#num_attributes').text(graph.attributes.length)
+	$('#num_relationships').text(graph.relationships.length)
+    renderSceneGraph('#image-graph', graph);
+});
+</script>
+</body>
+</html>
