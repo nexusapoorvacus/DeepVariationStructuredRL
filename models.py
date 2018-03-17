@@ -53,10 +53,10 @@ class DQN_MLP(nn.Module):
 			layers.append(nn.ReLU())
 		layers.append(nn.Linear(hidden_size, output_size))
 		self.layers = nn.Sequential(*layers)
-		self.sigmoid = nn.Sigmoid()
+		self.softmax = nn.Softmax()
 
 	def forward(self, x):
-		return self.sigmoid(self.layers(x))
+		return self.softmax(self.layers(x))
 
 
 
