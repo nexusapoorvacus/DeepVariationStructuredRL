@@ -1,0 +1,1 @@
+{"objects": [{"name": "person"}, {"name": "shirt"}], "attributes": [{"attribute": "tall", "object": 0}, {"attribute": "old", "object": 0}, {"attribute": "white", "object": 1}], "relationships": [{"predicate": "wearing", "subject": 0, "object": 1}]}
