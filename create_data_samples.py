@@ -9,9 +9,9 @@ OUTPUT_VALIDATION_DATA_FILE = "data/data_samples/validation_data.json"
 OUTPUT_TEST_DATA_FILE = "data/data_samples/test_data.json"
 SCENE_GRAPH_DATA  = "data/raw_data/scene_graphs.json"
 ATTRIBUTE_DATA = "data/raw_data/attributes.json"
-NUM_IMAGES_TRAIN = 100
-NUM_IMAGES_VALIDATION = 25
-NUM_IMAGES_TEST = 25
+NUM_IMAGES_TRAIN = 25
+NUM_IMAGES_VALIDATION = 10
+NUM_IMAGES_TEST = 10
 
 def create_data_sample_file():
     images = []

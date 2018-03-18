@@ -20,8 +20,8 @@ profile = False
 #-----------------------------------------------------------------------------#
 # Specify model and table locations here
 #-----------------------------------------------------------------------------#
-path_to_models = '/home/aarti/DeepVariationStructuredRL/skip_thoughts/'
-path_to_tables = '/home/aarti/DeepVariationStructuredRL/skip_thoughts/'
+path_to_models = '/data/apoorvad/DeepVariationStructuredRL/skip_thoughts/'
+path_to_tables = '/data/apoorvad/DeepVariationStructuredRL/skip_thoughts/'
 #-----------------------------------------------------------------------------#
 
 path_to_umodel = path_to_models + 'uni_skip.npz'

@@ -14,10 +14,10 @@ class DetectEdgeNN(nn.Module):
            fully connected layer.
         """
         super(DetectEdgeNN, self).__init__()
-        densenet = models.densenet121(pretrained=True)
-        in_features = densenet.classifier.in_features
-        modules = list(densenet.children())[:-1] # delete the last fc layer.
-        modules.append(nn.AvgPool2d(7)) # add back the average pooling
+        resnet = models.resnet50(pretrained=True)
+        in_features = resnet.fc.in_features
+        modules = list(resnet.children())[:-1] # delete the last fc layer.
+        #modules.append(nn.AvgPool2d(7)) # add back the average pooling
         self.cnn = nn.Sequential(*modules)
         for param in self.cnn.parameters():
             param.requires_grad = True

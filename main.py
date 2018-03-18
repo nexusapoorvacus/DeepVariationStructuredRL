@@ -9,6 +9,8 @@ from image_state import ImageState
 from replay_buffer import ReplayMemory
 from utils.vg_utils import entity_to_aliases, predicate_to_aliases, find_object_neighbors, crop_box
 from PIL import Image
+from skip_thoughts import skipthoughts
+from collections import defaultdict
 
 import torch
 import torch.nn as nn
@@ -41,8 +43,13 @@ def train(parameters, train=True):
 	else:
 		number_of_epochs = num_epochs
 		data_loader = train_data_loader
+
+	# dictionary for skip-though
+	skip_thought_dict = defaultdict(lambda:[])
+
 	for epoch in range(number_of_epochs):
 		print("Epoch: ", epoch)
+		num = -1
 		for progress, (images, images_orig, gt_scene_graph) in enumerate(data_loader):
 			images = torch.autograd.Variable(torch.squeeze(images, 1))
 			if torch.cuda.is_available():
@@ -52,6 +59,8 @@ def train(parameters, train=True):
 	
 			# iterate through images in batch
 			for idx in range(images.size(0)):
+				num += 1
+				print("Image number " + str(num))
 				# initializing image state if necessary
 				image_name = gt_scene_graph[idx]["image_name"]
 				if image_name not in image_states:
@@ -94,13 +103,14 @@ def train(parameters, train=True):
 				im_state = image_states[image_name]	
 				while not im_state.is_done():
 					
-					print("Iter for image " + str(image_name))
+					#print("Iter for image " + str(image_name))
+
 					# get the image state object for image
 					im_state = image_states[image_name]
 	
 					#print("Computing state vector")
 					# compute state vector of image
-					state_vector = create_state_vector(im_state)
+					state_vector = create_state_vector(im_state, skip_thought_dict)
 					subject_id = im_state.current_subject
 					object_id = im_state.current_object
 					if type(state_vector) == type(None):
@@ -119,9 +129,15 @@ def train(parameters, train=True):
 					subject_bbox = im_state.entity_proposals[subject_id]
 					previously_mined_attributes = im_state.current_scene_graph["objects"][subject_id]["attributes"]
 					previously_mined_next_objects = im_state.objects_explored_per_subject[subject_id]
-					attribute_adaptive_actions, predicate_adaptive_actions = semantic_action_graph.variation_based_traversal(subject_name, object_name, previously_mined_attributes)
-					next_object_adaptive_actions = find_object_neighbors(subject_bbox, im_state.entity_proposals, previously_mined_next_objects)
-						
+					
+					if args.use_adaptive_action_sets:
+						attribute_adaptive_actions, predicate_adaptive_actions = semantic_action_graph.variation_based_traversal(subject_name, object_name, previously_mined_attributes)
+						next_object_adaptive_actions = find_object_neighbors(subject_bbox, im_state.entity_proposals, previously_mined_next_objects)
+					else:
+						attribute_adaptive_actions = range(len(semantic_action_graph.attribute_nodes))
+						predicate_adaptive_actions = range(len(semantic_action_graph.predicate_nodes))
+						next_object_adaptive_actions = range(len(im_state.entity_proposals)-1)	
+	
 					# creating state + action vectors to feed in DQN
 					#print("Creating state + action vectors to pass into DQN...")
 					attribute_state_vectors = create_state_action_vector(state_vector, attribute_adaptive_actions, len(semantic_action_graph.attribute_nodes))
@@ -135,13 +151,20 @@ def train(parameters, train=True):
 						attribute_action = choose_action_epsilon_greedy(attribute_state_vectors, attribute_adaptive_actions, model_attribute_main, parameters["epsilon"], training=replay_buffer.can_sample())
 					if type(predicate_state_vectors) != type(None):
 						predicate_action = choose_action_epsilon_greedy(predicate_state_vectors, predicate_adaptive_actions, model_predicate_main, parameters["epsilon"], training=replay_buffer.can_sample())
+					
+					# update skip thought vector
+					if predicate_action != None and args.use_skip_thought:
+						skip_thought_dict[(im_state.current_subject, im_state.current_object)].append(predicate_action)
+					if len(skip_thought_dict[(im_state.current_subject, im_state.current_object)]) > 2:
+						skip_thought_dict[(im_state.current_subject, im_state.current_object)].pop(0)
+
 					if type(next_object_state_vectors) != type(None):
 						next_object_action = choose_action_epsilon_greedy(next_object_state_vectors, next_object_adaptive_actions, model_next_object_main, parameters["epsilon"], training=replay_buffer.can_sample())
 					# step image_state
 					#print("Step state environment using action...")
 					attribute_reward, predicate_reward, next_object_reward, done = im_state.step(attribute_action, predicate_action, next_object_action)
 					#print("Rewards(A,P,O)", attribute_reward, predicate_reward, next_object_reward)
-					next_state = create_state_vector(im_state)		
+					next_state = create_state_vector(im_state, skip_thought_dict)		
 					im_state = image_states[image_name]
 					# decay epsilon
 					if parameters["epsilon"] > parameters["epsilon_end"]:
@@ -239,7 +262,7 @@ def train(parameters, train=True):
 		pickle.dump({"gt": gt_graphs, "curr": our_graphs}, handle)
 
 
-def create_state_vector(image_state):
+def create_state_vector(image_state, skip_thought_dict):
 	# find subject to start with if curr_subject is None
 	if image_state.current_subject == None or len(image_state.objects_explored_per_subject[image_state.current_subject]) >= image_state.max_objects_to_explore:
 		curr_subject_feature = None
@@ -263,8 +286,28 @@ def create_state_vector(image_state):
 			return None
 		image_state.current_object = curr_object_id
 		#image_state.current_object = curr_object_id[0]
+	subject_name = image_state.entity_classes[image_state.current_subject]
+	object_name = image_state.entity_classes[image_state.current_object]
+	# get skip thought encoding
+	if len(skip_thought_dict[(image_state.current_subject, image_state.current_object)]) > 0 and args.use_skip_thought:
+		relationships = skip_thought_dict[(image_state.current_subject, image_state.current_object)]
+		rel = semantic_action_graph.predicate_nodes[relationships[0]].name
+		if type(rel) == tuple:
+			rel = rel[0]
+		st_encoding = torch.from_numpy(skip_thought_encoder.encode([subject_name +" "+ rel + " " + object_name]))
+		if  len(relationships) == 2:
+			rel2 = semantic_action_graph.predicate_nodes[relationships[1]].name
+			if type(rel2) == tuple:
+				rel2 = rel2[0]
+			st_encoding2 = torch.from_numpy(skip_thought_encoder.encode([subject_name +" "+ rel2 + " " + object_name]))
+			st_encoding = torch.cat([torch.squeeze(st_encoding), torch.squeeze(st_encoding2)])
+		else:
+			st_encoding = torch.cat([torch.squeeze(st_encoding), torch.zeros(4800)])
+	else:
+		st_encoding = torch.zeros(9600)
+	
 	curr_object_feature = image_state.entity_features[image_state.current_object]
-	return torch.cat([torch.squeeze(image_state.image_feature), torch.squeeze(curr_subject_feature), torch.squeeze(curr_object_feature)])
+	return torch.cat([torch.squeeze(image_state.image_feature), torch.squeeze(curr_subject_feature), torch.squeeze(curr_object_feature), torch.autograd.Variable(st_encoding).cuda()])
 
 def create_state_action_vector(state_vector, action_set, total_set_size):
 	len_action_set = len(action_set)
@@ -283,7 +326,6 @@ def create_state_action_vector(state_vector, action_set, total_set_size):
 def choose_action_epsilon_greedy(state, adaptive_action_set, model, epsilon, training=False):
 	sample = random.random()
 	if sample > epsilon and training: # exploiti
-		print("main prediction", adaptive_action_set[int(torch.squeeze(model(state)).max(0)[1].data.cpu().numpy())])
 		return adaptive_action_set[int(torch.squeeze(model(state)).max(0)[1].data.cpu().numpy())]
 	else: # explore
 		return random.choice(adaptive_action_set)
@@ -374,12 +416,12 @@ if __name__=='__main__':
 
 	# create DQN's for the next object, predicates, and attributes
 	print("Creating DQN models...")
-	DQN_next_object_main = DQN_MLP(2048*3 + parameters["maximum_num_entities_per_image"], 1)
-	DQN_next_object_target = DQN_MLP(2048*3 + parameters["maximum_num_entities_per_image"], 1)
-	DQN_predicate_main = DQN_MLP(2048*3 + len(semantic_action_graph.predicate_nodes), 1)
-	DQN_predicate_target = DQN_MLP(2048*3 + len(semantic_action_graph.predicate_nodes), 1)
-	DQN_attribute_main = DQN_MLP(2048*3 + len(semantic_action_graph.attribute_nodes), 1)
-	DQN_attribute_target = DQN_MLP(2048*3 + len(semantic_action_graph.attribute_nodes), 1)
+	DQN_next_object_main = DQN_MLP(2048*3+9600 + parameters["maximum_num_entities_per_image"], 1)
+	DQN_next_object_target = DQN_MLP(2048*3+9600 + parameters["maximum_num_entities_per_image"], 1)
+	DQN_predicate_main = DQN_MLP(2048*3+9600 + len(semantic_action_graph.predicate_nodes), 1)
+	DQN_predicate_target = DQN_MLP(2048*3+9600 + len(semantic_action_graph.predicate_nodes), 1)
+	DQN_attribute_main = DQN_MLP(2048*3+9600 + len(semantic_action_graph.attribute_nodes), 1)
+	DQN_attribute_target = DQN_MLP(2048*3+9600 + len(semantic_action_graph.attribute_nodes), 1)
 	print("Done!")
 
 	# create shared optimizer
@@ -401,6 +443,10 @@ if __name__=='__main__':
 	print("Creating replay buffer...")
 	replay_buffer = ReplayMemory(replay_buffer_capacity, replay_buffer_minimum_number_samples)
 	print("Done!")
+
+	# load skip thought model
+	skip_thought_model = skipthoughts.load_model()
+	skip_thought_encoder = skipthoughts.Encoder(skip_thought_model)
 
 	# load train data samples
 	if args.train:

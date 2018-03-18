@@ -7,6 +7,7 @@ from torchvision import transforms
 from pathlib import Path
 from tools import union
 from models import DetectEdgeNN
+from sklearn.metrics import precision_recall_fscore_support
 
 import argparse
 import h5py
@@ -177,6 +178,8 @@ def test(data_loader, model, dataset_name="Test"):
       model = model.cuda()
     correct = 0
     total = 0
+    all_predicted = []
+    all_labels = []
     for i, data in enumerate(data_loader):
       if len(data) == 0:
         continue
@@ -194,22 +197,26 @@ def test(data_loader, model, dataset_name="Test"):
       predicted = torch.round(outputs.data).long()
       total += labels.size(0)
       correct += (predicted.view(1, -1) == labels).sum()
+      all_predicted = predicted.cpu().numpy().tolist() + all_predicted
+      all_labels = labels.cpu().numpy().tolist() + all_labels
     acc = (correct + 0.0) / total
     print('Test Accuracy of the '+ dataset_name +' model: %f %%' % acc)
+    print(precision_recall_fscore_support(all_predicted, all_labels))
+
     return acc 
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--bbox_train', type=str,
-                        default='data_train.json',
+                        default='data_train_1000im_10pair.json',
                         help='Location of file containing the training data samples.')
     parser.add_argument('--bbox_test', type=str,
-                        default="data_test.json",
+                        default="data_test_1000im_10pair.json",
                         help='Location of file containing the test data samples.')
     parser.add_argument('--bbox_validate', type=str,
-                        default="data_valid.json",
+                        default="data_valid_1000im_10pair.json",
                         help='Location of the file containing the validation data samples')
-    parser.add_argument('--image-dir', type=str, default='/data/apoorvad/VG_100K/',
+    parser.add_argument('--image-dir', type=str, default='/data/apoorvad/VG_Scene_Graph/VG_100K/',
                          help='Location of the image files')
     parser.add_argument('--batch-size', type=int, default=8,
                         help='batch size.')
@@ -219,7 +226,7 @@ if __name__=='__main__':
                         help='Input size for resnet')
     parser.add_argument('--learning-rate', type=float, default=0.00001,
                         help='Learning Rate')
-    parser.add_argument('--num-epochs', type=int, default=20,
+    parser.add_argument('--num-epochs', type=int, default=1,
                         help="Number of epochs to train")
     parser.add_argument('--train', type=str, default='True',
                         help="Train the network.")
