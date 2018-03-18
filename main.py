@@ -19,7 +19,7 @@ import pickle
 import numpy as np
 import random
 
-def train(parameters):
+def train(parameters, train=True):
 	print("CUDA Available: " + str(torch.cuda.is_available()))
 	# make model CUDA
 	if torch.cuda.is_available():
@@ -35,10 +35,15 @@ def train(parameters):
 	# keeps track of current scene graphs for images
 	image_states = {}
 	total_number_timesteps_taken = 0
-
-	for epoch in range(num_epochs):
+	if train == False:
+		number_of_epochs = 1
+		data_loader = validation_data_loader
+	else:
+		number_of_epochs = num_epochs
+		data_loader = train_data_loader
+	for epoch in range(number_of_epochs):
 		print("Epoch: ", epoch)
-		for progress, (images, images_orig, gt_scene_graph) in enumerate(train_data_loader):
+		for progress, (images, images_orig, gt_scene_graph) in enumerate(data_loader):
 			images = torch.autograd.Variable(torch.squeeze(images, 1))
 			if torch.cuda.is_available():
 				images = images.cuda()
@@ -133,15 +138,15 @@ def train(parameters):
 					if type(next_object_state_vectors) != type(None):
 						next_object_action = choose_action_epsilon_greedy(next_object_state_vectors, next_object_adaptive_actions, model_next_object_main, parameters["epsilon"], training=replay_buffer.can_sample())
 					# step image_state
-					print("Step state environment using action...")
+					#print("Step state environment using action...")
 					attribute_reward, predicate_reward, next_object_reward, done = im_state.step(attribute_action, predicate_action, next_object_action)
-					print("Rewards(A,P,O)", attribute_reward, predicate_reward, next_object_reward)
+					#print("Rewards(A,P,O)", attribute_reward, predicate_reward, next_object_reward)
 					next_state = create_state_vector(im_state)		
 					im_state = image_states[image_name]
 					# decay epsilon
 					if parameters["epsilon"] > parameters["epsilon_end"]:
 						parameters["epsilon"] = parameters["epsilon"] * parameters["epsilon_anneal_rate"]
-						print("NEW EPSILON", parameters["epsilon"])	
+						#print("NEW EPSILON", parameters["epsilon"])	
 					# add transition tuple to replay buffer
 					#print("Adding transition tuple to replay buffer...")
 					subject_name_1 =  entity_to_aliases(im_state.entity_classes[im_state.current_subject])
@@ -173,7 +178,7 @@ def train(parameters):
 								if type(next_state_attribute) != type(None):
 									next_state_attribute.volatile = True
 									output = torch.max(model_attribute_target(next_state_attribute))[0]
-									print("output of target model attributes", output)
+									#print("output of target model attributes", output)
 									target_q_attribute = transition.attribute_reward + parameters["discount_factor"] * output
 								if type(next_state_predicate) != type(None):
 									next_state_predicate.volatile = True
@@ -189,9 +194,9 @@ def train(parameters):
 							main_q_attribute, main_q_predicate, main_q_next_object = None, None, None
 							if type(main_state_attribute) != type(None) and type(target_q_attribute) != type(None):	
 								main_q_attribute = transition.attribute_reward + parameters["discount_factor"] * torch.max(model_attribute_main(main_state_attribute))
-								print("main & target preds", main_q_attribute, target_q_attribute)
+								#print("main & target preds", main_q_attribute, target_q_attribute)
 								loss_attribute = loss_fn_attribute(main_q_attribute, target_q_attribute)
-								print("Loss attribute: " + str(loss_attribute.data[0]))	
+								#print("Loss attribute: " + str(loss_attribute.data[0]))	
 								optimizer_attribute.zero_grad()	
 								loss_attribute.backward()
 								for param in model_attribute_main.parameters():
@@ -202,7 +207,7 @@ def train(parameters):
 								main_q_predicate = transition.predicate_reward + parameters["discount_factor"] * torch.max(model_predicate_main(main_state_predicate))
 								loss_predicate = loss_fn_predicate(main_q_predicate, target_q_predicate)
 								optimizer_predicate.zero_grad()
-								print("Loss predicate: " + str(loss_predicate.data[0]))	
+								#print("Loss predicate: " + str(loss_predicate.data[0]))	
 								loss_predicate.backward()
 								for param in model_predicate_main.parameters():
 									param.grad.data.clamp_(-1, 1)
@@ -212,7 +217,7 @@ def train(parameters):
 								main_q_next_object = transition.next_object_reward + parameters["discount_factor"] * torch.max(model_next_object_main(main_state_next_object))
 								loss_next_object = loss_fn_next_object(main_q_next_object, target_q_next_object)
 								optimizer_next_object.zero_grad()
-								print("Loss next object: " + str(loss_next_object.data[0]))	
+								#print("Loss next object: " + str(loss_next_object.data[0]))	
 								loss_next_object.backward()
 								for param in model_next_object_main.parameters():
 									param.grad.data.clamp_(-1, 1)
@@ -220,13 +225,11 @@ def train(parameters):
 
 					# update target weights if it has been tao steps
 					if total_number_timesteps_taken % target_update_frequency == 0:
-						print("UPDATING TARGET NOW")
+						#print("UPDATING TARGET NOW")
 						update_target(model_attribute_main, model_attribute_target)
 						update_target(model_predicate_main, model_predicate_target)
 						update_target(model_next_object_main, model_next_object_target)
 			
-		# evaluate statistics on validation set
-		evaluate(validation_data_loader)
 	gt_graphs = []
 	our_graphs = []
 	for ims in image_states.values():
@@ -235,9 +238,6 @@ def train(parameters):
 	with open("image_states.pickle", "wb") as handle:
 		pickle.dump({"gt": gt_graphs, "curr": our_graphs}, handle)
 
-
-def evaluate(data_loader):
-	pass
 
 def create_state_vector(image_state):
 	# find subject to start with if curr_subject is None
@@ -322,6 +322,10 @@ if __name__=='__main__':
 	parser.add_argument("--maximum_num_entities_per_image", type=int, default=500, help="maximum number of entities to explore per image")
 	parser.add_argument("--maximum_adaptive_action_space_size", type=int, default=20, help="maximum size of adaptive_action space")
 	parser.add_argument("--num_workers", type=int, default=4, help="number of threads")
+	parser.add_argument("--use_adaptive_action_sets", help="Whether to use adaptive actions sets or not", action="store_true")
+	parser.add_argument("--use_skip_thought", help="Whether to use skip thought history embeddings in the state", action="store_true")
+	parser.add_argument("--use_exact_match", help="Whether to consider similar matches as positive rewards (as opposed to exact match)", action="store_true")
+	parser.add_argument("--positive_reward", type=int, default=1, help="Amount of positive reward when correct prediction made")
 	args = parser.parse_args()
 
 	# saving parameters in variables
