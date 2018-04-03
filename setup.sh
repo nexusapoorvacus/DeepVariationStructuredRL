@@ -7,3 +7,7 @@ python get_counts.py
 python create_semantic_action_graph.py -e
 python create_semantic_action_graph.py -p
 python create_semantic_action_graph.py -a
+
+# create data files
+python create_data_samples.py -s
+python create_data_samples.py -a
