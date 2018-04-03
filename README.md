@@ -11,12 +11,12 @@ We will be using Pytorch and other Python libraries to create our VRL model. Fol
 
 1. Install the appropriate version of Pytorch for your system from the [Pytorch website](http://pytorch.org/).
 2. Run `pip install -r requirements.txt`
-3. Do the following if you want to use Faster RCNN to generate box proposals and class labels, rather than using ground truth.
+3. Do the following if you want to use Faster RCNN to generate box proposals and class labels, rather than using ground truth. We are using the faster rcnn implementation from [here](https://github.com/longcw/faster_rcnn_pytorch).
 * `cd faster_rcnn`
 * `./make.sh`
 * Download the faster-rcnn model [here](https://drive.google.com/open?id=0B4pXCfnYmG1WOXdpYVFybWxiZFE) to the same directory as main.py
 * Make sure cuda is in your PATH (ex: `export PATH=$PATH:/usr/local/cuda/bin`)
-4. Do the following if you want to include skip thought history embeddings in your state vectors:
+4. Do the following if you want to include skip thought history embeddings in your state vectors. We are using the skip thought implementation from [here](https://github.com/ryankiros/skip-thoughts).
 * `cd skipthoughts`
 * Download the following:
 <pre><code>wget http://www.cs.toronto.edu/~rkiros/models/dictionary.txt
