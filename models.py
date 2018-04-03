@@ -5,6 +5,17 @@ import torchvision.models as models
 class VGG16(nn.Module):
 	def __init__(self):
 		super(VGG16, self).__init__()
+		self.model = models.vgg16(pretrained=True)
+    		for param in self.model.parameters():
+			param.requires_grad = False
+    
+	def forward(self, x):
+        	return self.model.features(x)
+
+
+class ResNet50(nn.Module):
+	def __init__(self):
+		super(ResNet50, self).__init__()
 		resnet = models.resnet50(pretrained=True)
 		modules = list(resnet.children())[:-1] # delete the last fc layer.
     		self.model = nn.Sequential(*modules)

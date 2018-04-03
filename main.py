@@ -1,7 +1,7 @@
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 from dataset import VGDataset, collate
-from models import VGG16, DQN, DQN_MLP
+from models import ResNet50, DQN, DQN_MLP
 from operator import itemgetter
 from faster_rcnn import network
 from faster_rcnn.faster_rcnn import FasterRCNN
@@ -24,7 +24,7 @@ def train(parameters, train=True):
 	print("CUDA Available: " + str(torch.cuda.is_available()))
 	# make model CUDA
 	if torch.cuda.is_available():
-		model_VGG = model_vgg.cuda()
+		model_IM_EMB = im_emb_model.cuda()
 		model_FRCNN = model_frcnn.cuda()
 		model_next_object_main = DQN_next_object_main.cuda()
 		model_next_object_target = DQN_next_object_target.cuda()	
@@ -54,7 +54,7 @@ def train(parameters, train=True):
 			if torch.cuda.is_available():
 				images = images.cuda()
 			# get image features from VGG16
-			images = model_VGG(images)
+			images = model_IM_EMB(images)
 	
 			# iterate through images in batch
 			for idx in range(images.size(0)):
@@ -90,7 +90,7 @@ def train(parameters, train=True):
 						cropped_entity = torch.autograd.Variable(cropped_entity)
 						if torch.cuda.is_available():
 							cropped_entity = cropped_entity.cuda()
-						box_feature = model_VGG(cropped_entity)
+						box_feature = model_IM_EMB(cropped_entity)
 						entity_features.append(box_feature)
 					im_state = ImageState(gt_sg["image_name"], gt_sg, image_feature, entity_features,
 											entity_proposals, entity_classes, entity_scores, semantic_action_graph)
@@ -347,6 +347,9 @@ if __name__=='__main__':
 	parser.add_argument("--images_dir", type=str,
 				default="data/VG_100K/",
 				help="Location of Visual Genome images")
+        parser.add_argument("--image_embedding_model_type", type=str, 
+                                default="resnet",
+                                help="resnet or vgg (used to create image embedding)")
 	parser.add_argument("--train", help="trains model", action="store_true")
 	parser.add_argument("--test", help="evaluates model", action="store_true")
 	parser.add_argument("--num_epochs", type=int, default=5, help="number of epochs to train on")
@@ -400,8 +403,14 @@ if __name__=='__main__':
 	print("Done!")	
 
 	# create VGG model for state featurization
-	print("Loading VGG model...")
-	model_vgg = VGG16()
+	print("Loading image embedding model...")
+        if args.image_embedding_model_type == "resnet":
+	    im_emb_model = ResNet50()
+        elif args.image_embedding_model_type == "vgg":
+            im_emb_model = VGG16()
+        else:
+            print("--image_embedding_model_type must be either resnet or vgg")
+            sys.exit(0)
 	print("Done!")
 
 	# create Faster-RCNN model for state featurization
