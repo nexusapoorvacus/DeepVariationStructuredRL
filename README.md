@@ -2,7 +2,33 @@
 This repository contains a PyTorch implementation of the [Deep Variation-structured Reinforcement Learning for Visual Relationship and Attribute Detection](https://arxiv.org/abs/1703.03054) paper by Liang et. al [5].
 
 ## Setup
-We will be using the [Visual Genome Dataset](http://visualgenome.org) to train this network.
+
+### Downloading the Data
+We will be using the [Visual Genome Dataset](http://visualgenome.org) to train this network. You can access the first part of the data set [here](https://cs.stanford.edu/people/rak248/VG_100K_2/images.zip) and the second part [here](https://cs.stanford.edu/people/rak248/VG_100K_2/images2.zip). Once you have downloaded both parts, create a folder that contains all the images from both parts in a single folder.
+
+### Dependencies
+We will be using Pytorch and other Python libraries to create our VRL model. Follow the instructions below to obtaint the necessary dependencies
+
+1. Install the appropriate version of Pytorch for your system from the [Pytorch website](http://pytorch.org/).
+2. Run `pip install -r requirements.txt`
+3. Do the following if you want to use Faster RCNN to generate box proposals and class labels, rather than using ground truth. We are using the faster rcnn implementation from [here](https://github.com/longcw/faster_rcnn_pytorch).
+* `cd faster_rcnn`
+* `./make.sh`
+* Download the faster-rcnn model [here](https://drive.google.com/open?id=0B4pXCfnYmG1WOXdpYVFybWxiZFE) to the same directory as main.py
+* Make sure cuda is in your PATH (ex: `export PATH=$PATH:/usr/local/cuda/bin`)
+4. Do the following if you want to include skip thought history embeddings in your state vectors. We are using the skip thought implementation from [here](https://github.com/ryankiros/skip-thoughts).
+* `cd skipthoughts`
+* Download the following:
+<pre><code>wget http://www.cs.toronto.edu/~rkiros/models/dictionary.txt
+wget http://www.cs.toronto.edu/~rkiros/models/utable.npy
+wget http://www.cs.toronto.edu/~rkiros/models/btable.npy
+wget http://www.cs.toronto.edu/~rkiros/models/uni_skip.npz
+wget http://www.cs.toronto.edu/~rkiros/models/uni_skip.npz.pkl
+wget http://www.cs.toronto.edu/~rkiros/models/bi_skip.npz
+wget http://www.cs.toronto.edu/~rkiros/models/bi_skip.npz.pkl</code></pre>
+
+### Create the Semantic Action Graph and Data Files
+Run `./setup.sh`. This will create predicate_counts.json, attribute_counts.json, and entity_counts.json which contains the number of times a predicate, attribute, entity (respectively) have occured in the Visual Genome dataset. This will be used to create the semantic action graph, which is saved as graph.pickle. We only consider predicates, attributes, and entities that have appeared at least 200 times. You can change this parameter by including a `--min_occurances` flag when running create_semantic_action_graph.py in setup.sh. The smaller this number is, the larger your graph will be. Lastly, train_data.json, validation_data.json, and test_data.json are created in data/data_samples/ which are used to train/evaluate the model.  
 
 ## Training
 To begin training the network, run
