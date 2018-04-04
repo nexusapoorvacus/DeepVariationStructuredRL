@@ -4,7 +4,17 @@ This repository contains a PyTorch implementation of the [Deep Variation-structu
 ## Setup
 
 ### Downloading the Data
-We will be using the [Visual Genome Dataset](http://visualgenome.org) to train this network. You can access the first part of the data set [here](https://cs.stanford.edu/people/rak248/VG_100K_2/images.zip) and the second part [here](https://cs.stanford.edu/people/rak248/VG_100K_2/images2.zip). Once you have downloaded both parts, create a folder that contains all the images from both parts in a single folder.
+First create a folder called data in the root folder of the repository (`mkdir data`). We will be using the [Visual Genome Dataset](http://visualgenome.org) to train this network. Follow the steps below to obtain the necessary data.
+
+1. You can access the first part of the data set [here](https://cs.stanford.edu/people/rak248/VG_100K_2/images.zip) and the second part [here](https://cs.stanford.edu/people/rak248/VG_100K_2/images2.zip). Once you have downloaded both parts, create a folder that contains all the images from both parts in a single folder called VG_100K in the data folder.
+2. Inside the data folder, create a folder called raw_data. Download the following files inside this new folder. Be sure to unzip the zip files.
+<pre><code>wget http://visualgenome.org/static/data/dataset/objects.json.zip
+wget http://visualgenome.org/static/data/dataset/relationships.json.zip
+wget http://visualgenome.org/static/data/dataset/object_alias.txt
+wget http://visualgenome.org/static/data/dataset/relationship_alias.txt
+wget http://visualgenome.org/static/data/dataset/attributes.json.zip
+wget http://visualgenome.org/static/data/dataset/scene_graphs.json.zip</code></pre>
+3. Create a folder called data_samples inside the data file. This is where the train, validation, and test files will be placed.
 
 ### Dependencies
 We will be using Pytorch and other Python libraries to create our VRL model. Follow the instructions below to obtaint the necessary dependencies
@@ -42,13 +52,21 @@ To evalutate a pretrained model, run
 
 Add the `--visualize <number>` flag to save <number> scene graph diagrams to `visualizations/`.
   
-## Sample Results & Visualizations
+## Viewing Visualizations
+After running main.py with the `--train` or `--evaluate` flag, a file called image_states.pickle will be created. image_states.pickle will be created after going through at least one epoch when using the `--train` flag. Move image_states.pickle into the graphviz folder (`mv image_states.pickle graphviz`). Then run the following commands:
+
+1. Run `python pickle_to_files.py`. This will create 2 JSON files for each image; one representing the ground truth scene graph and the other representing the scene graph created by the VRL model.
+2. Run `python visualize_scene_graph.py --graph <JSON filename>` to visualize the graph represented by the JSON file.
+
+## Results
+Below we have included one example of a scene graph generated using VRL.
+
+Generated Scene Graph
+
+![](vrl_graph.JPG)
 
 ## Poster
-This project was originally done for a Reinforcement Learning class at Stanford University (CS234). The poster for this project can be found [here](https://docs.google.com/presentation/d/1DKUT8oT75fstDhadKfCuODS3zHz26Mn1Oj9NvumFZQM/edit?usp=sharing) and the final report can be found [here](https://drive.google.com/file/d/10y1mYCvm7Q6Y4HLyBAmX2neYFcGwUl9x/view?usp=sharing).
-
-More setup/train/test instruction updates coming soon.
-
+This project was originally done for a Reinforcement Learning class at Stanford University (CS234). The poster for this project can be found [here](poster.pdf) and the final report can be found [here](https://drive.google.com/file/d/10y1mYCvm7Q6Y4HLyBAmX2neYFcGwUl9x/view?usp=sharing).
 
 Citations:
 
@@ -57,7 +75,6 @@ Citations:
 [2] Newell, Alejandro, and Jia Deng. “Pixels to Graphs by Associative Embedding.” [1706.07365] Pixels to Graphs by Associative Embedding, 22 June 2017, arxiv.org/abs/1706.07365.
 
 [3] Ranjay Krishna, Yuke Zhu, Oliver Groth, Justin Johnson, Kenji Hata, Joshua Kravitz, Stephanie Chen, Yannis Kalantidis, Li-Jia Li, David A Shamma, Michael Bernstein, and Li Fei-Fei. Visual genome: Connecting language and vision using crowdsourced dense image annotations. 2016.
-
 
 [4] Huang, Gao and Liu, Zhuang and van der Maaten, Laurens and Weinberger, Kilian Q, \textit{Densely connected convolutional networks}, Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, 2017
 
