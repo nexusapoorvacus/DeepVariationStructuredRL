@@ -52,13 +52,21 @@ To evalutate a pretrained model, run
 
 Add the `--visualize <number>` flag to save <number> scene graph diagrams to `visualizations/`.
   
-## Sample Results & Visualizations
+## Viewing Visualizations
+After running main.py with the `--train` or `--evaluate` flag, a file called image_states.pickle will be created. image_states.pickle will be created after going through at least one epoch when using the `--train` flag. Move image_states.pickle into the graphviz folder (`mv image_states.pickle graphviz`). Then run the following commands:
+
+1. Run `python pickle_to_files.py`. This will create 2 JSON files for each image; one representing the ground truth scene graph and the other representing the scene graph created by the VRL model.
+2. Run `python visualize_scene_graph.py --graph <JSON filename>` to visualize the graph represented by the JSON file.
+
+## Results
+Below we have included one example of a scene graph generated using VRL.
+
+Generated Scene Graph
+
+![](vrl_graph.JPG)
 
 ## Poster
 This project was originally done for a Reinforcement Learning class at Stanford University (CS234). The poster for this project can be found [here](poster.pdf) and the final report can be found [here](https://drive.google.com/file/d/10y1mYCvm7Q6Y4HLyBAmX2neYFcGwUl9x/view?usp=sharing).
-
-More setup/train/test instruction updates coming soon.
-
 
 Citations:
 
@@ -67,7 +75,6 @@ Citations:
 [2] Newell, Alejandro, and Jia Deng. “Pixels to Graphs by Associative Embedding.” [1706.07365] Pixels to Graphs by Associative Embedding, 22 June 2017, arxiv.org/abs/1706.07365.
 
 [3] Ranjay Krishna, Yuke Zhu, Oliver Groth, Justin Johnson, Kenji Hata, Joshua Kravitz, Stephanie Chen, Yannis Kalantidis, Li-Jia Li, David A Shamma, Michael Bernstein, and Li Fei-Fei. Visual genome: Connecting language and vision using crowdsourced dense image annotations. 2016.
-
 
 [4] Huang, Gao and Liu, Zhuang and van der Maaten, Laurens and Weinberger, Kilian Q, \textit{Densely connected convolutional networks}, Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, 2017
 
