@@ -45,12 +45,12 @@ To begin training the network, run
 
 `python main.py --train`
 
+There are numerous flags that can be modified. You can see a list of these flags by running `python main.py -h` or by looking at main.py.
+
 ## Evaluation
 To evalutate a pretrained model, run
 
-`python main.py --evaluate`
-
-Add the `--visualize <number>` flag to save <number> scene graph diagrams to `visualizations/`.
+`python main.py --test`
   
 ## Viewing Visualizations
 After running main.py with the `--train` or `--evaluate` flag, a file called image_states.pickle will be created. image_states.pickle will be created after going through at least one epoch when using the `--train` flag. Move image_states.pickle into the graphviz folder (`mv image_states.pickle graphviz`). Then run the following commands:
