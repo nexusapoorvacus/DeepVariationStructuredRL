@@ -3,7 +3,7 @@ import argparse
 import os
 import sys
 
-IMAGE_DIR = "/data/apoorvad/VG_Scene_Graph/VG_100K/"
+IMAGE_DIR = "data/VG_100K/"
 OUTPUT_TRAIN_DATA_FILE = "data/data_samples/train_data.json"
 OUTPUT_VALIDATION_DATA_FILE = "data/data_samples/validation_data.json"
 OUTPUT_TEST_DATA_FILE = "data/data_samples/test_data.json"
